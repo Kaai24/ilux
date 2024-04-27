@@ -1,0 +1,471 @@
+#!/bin/bash -e
+
+version="Version 3.240420b"
+support="For consulting or any kind of support visit www.kaai24.eu"
+server="http://www.kaai24.org/cli"
+
+mkdir -p /opt/ilux/install/
+mkdir -p ~/Downloads/ilux
+cp -a ilux-install /opt/ilux/install/
+
+echo "Ilux installation"
+echo ""
+echo "ilux-install [OPTION...]"
+echo "--------------------------------------------"
+
+case $@ in
+  *"cinnamon"* )
+    echo "Cinnamon desktop selected"
+    instlist="cinnamon-core"
+    touch /opt/ilux/install/desktop.lock
+    ;;
+  *"gnome"* )
+    echo "Gnome 3 desktop selected"
+    instlist="gnome-core"
+    touch /opt/ilux/install/desktop.lock
+    ;;
+esac
+
+# Server setup --------------------------------------------
+case $@ in
+  *"core"*)
+    echo "Core installation"
+    ;;
+  *"lamp"* )
+    echo "LAMP server selected"
+    instlist="$instlist atop cockpit cockpit-pcp apache2 php libapache2-mod-php python-certbot-apache"
+    # MariaDB
+    instlist="$instlist mariadb-server php-mysql"
+    
+    ln -s /var/www/html /srv/www
+    
+    case $@ in
+      *"full"* )
+        instlist="$instlist redis memcached libmemcached-tools"
+        # PHP
+        instlist="$instlist php-apcu php-gd php-imagick php-redis php-memcached" #php-memcache
+        ;;
+    esac
+    ;;
+  *"pve"* )
+    echo "Proxmox Virtual Environment selected"
+    echo "deb [arch=amd64] http://download.proxmox.com/debian/pve buster pve-no-subscription" > /etc/apt/sources.list.d/pve-install-repo.list
+    wget http://download.proxmox.com/debian/proxmox-ve-release-7.x.gpg -O /etc/apt/trusted.gpg.d/proxmox-ve-release-7.x.gpg
+    wget http://download.proxmox.com/debian/proxmox-ve-release-8.x.gpg -O /etc/apt/trusted.gpg.d/proxmox-ve-release-8.x.gpg
+    instlist="$instlist proxmox-ve postfix open-iscsi"
+    ;;
+  *"server"* )
+    echo "General server installation"
+    instlist="$instlist atop cockpit cockpit-pcp nfs-kernel-server samba ca-certificates curl gnupg" #zfsutils-linux
+    
+    mkdir -p /srv/share
+    chmod 777 /srv/share
+    
+    touch /opt/ilux/install/server.lock
+    ;;
+# Menu setup --------------------------------------------
+  *"status"*)
+    echo "Installed roles"
+    cd /opt/ilux/install/
+    ls *.lock
+    cd
+    echo ""
+    echo "Remove /opt/ilux/install/*.lock files to be able to reinstall"
+    exit
+    ;;
+  *"help"*)
+    echo "$version"
+    echo ""
+    echo ""
+    echo " [full] switches the installation frome lite to a"
+    echo "        more complete solution for daily usage in"
+    echo "        creative and professional environments."
+    echo ""
+    echo "Some possible installations:"
+    echo " [lamp full]         +php-modules,redis,..."
+    echo " [cinnamon full office]     +gimp,vlc,clementine,steam,libreoffice..."
+    echo " [server gnome full] Docker,WebUI, +GUI, +sqlitebrowser..."
+    echo ""
+    echo "For consulting or any kind of support visit www.kaai24.eu"
+    exit
+    ;;
+  * )
+    if [ -r /opt/ilux/install/desktop.lock ]
+    then
+      echo "Desktop installation"
+    else
+      echo "Please add (multiple choice possible)"
+      echo ""
+      echo " [core]     Minimal setup                CLI"
+      echo " [server]   Server with Docker,NFS,SMB   Web"
+      echo " [lamp]     Webserver                    Web"
+      echo " [pve]      Proxmox Virtualisation Env.  Web"
+      echo " [cinnamon] Cinnamon desktop             GUI"
+      echo " [gnome]    Gnome 3 desktop              GUI"
+      echo ""
+      echo " [full]     +all recommended packages"
+      echo " [office]   +libreoffice"
+      echo ""
+      echo " [status]   Show installed roles"
+      echo " [help]     Show help"
+      exit
+    fi
+    ;;
+esac
+
+# Core setup --------------------------------------------
+# Min
+instlist="$instlist apt-file btrfs-progs fail2ban htop ifupdown2 iotop openssh-server rsync rsyslog smartmontools sshfs sudo tree vim zip"
+# Recommended
+instlist="$instlist powertop ethtool git lldpd mc nmon clamav clamav-freshclam clamav-daemon nfs-common dlocate smbclient cifs-utils flatpak"
+
+# Desktop setup --------------------------------------------
+if [ -r /opt/ilux/install/desktop.lock ]
+then
+  # Lite
+  instlist="$instlist gedit gnome-calculator gnome-screenshot eog nautilus gnome-disk-utility psensor terminator"
+  instlist="$instlist default-jre filezilla baobab gparted gpart clamtk clamtk-gnome synaptic ffmpeg radeontop gnome-software-plugin-flatpak"
+  
+  lspci > lspci.tmp
+  if grep -i "nvidia" lspci.tmp;
+  then
+    instlist="$instlist nvidia-driver"
+  fi
+  rm lspci.tmp
+  
+  case $@ in
+  *"full"* )
+    # Common
+    instlist="$instlist dconf-editor clementine vlc gimp hardinfo grsync"
+    instlist="$instlist redshift gnome-mines gnome-chess"
+    
+    # Productive
+    instlist="$instlist geany sqlitebrowser fonts-croscore gpaste putty"
+    instlist="$instlist inkscape obs-studio wireshark"
+    ;;
+  esac
+  
+  case $@ in
+  *"office"* )
+    # Office
+    instlist="$instlist libreoffice-writer libreoffice-calc"
+    ;;
+  esac
+fi
+
+
+
+# APT --------------------------------------------
+
+apt-add-repository contrib
+apt-add-repository non-free
+
+apt update
+apt dist-upgrade -y
+apt install -y $instlist
+
+cd ~/Downloads/ilux
+
+# GUI config --------------------------------------------
+if [ -r /opt/ilux/install/desktop.lock ]
+then
+  
+  # Brave Browser
+  if [ -r /opt/ilux/install/brave.lock ]
+  then
+    echo ""
+    echo "Brave is already installed"
+  else
+    echo "Brave browser installation"
+    apt install -y apt-transport-https curl gnupg
+    curl -s https://brave-browser-apt-release.s3.brave.com/brave-core.asc | apt-key --keyring /etc/apt/trusted.gpg.d/brave-browser-release.gpg add -
+    echo "deb [arch=amd64] https://brave-browser-apt-release.s3.brave.com/ stable main" | tee /etc/apt/sources.list.d/brave-browser-release.list
+    apt update
+    apt install -y brave-browser
+    touch /opt/ilux/install/brave.lock
+  fi
+  
+  case $@ in
+  *"full"* )
+    # Steam
+    if [ -r /opt/ilux/install/steam.lock ]
+    then
+      echo ""
+      echo "Steam is already installed"
+    else
+      echo "Valve Steam installation"
+      wget https://cdn.akamai.steamstatic.com/client/installer/steam.deb
+      dpkg -i steam.deb
+      touch /opt/ilux/install/steam.lock
+    fi
+    ;;
+  esac
+  
+  # Theme
+  if [ -r /opt/ilux/install/theme.lock ]
+  then
+    echo ""
+    echo "Theme is already installed"
+  else
+    echo "Preparing Ilux theme"
+    wget $server/files/ilux/mcata-dark.tar.xz
+    tar --keep-newer-files --xz -xf mcata-dark.tar.xz --directory /usr/share/themes/
+    wget $server/files/ilux/mcata-light.tar.xz
+    tar --keep-newer-files --xz -xf mcata-light.tar.xz --directory /usr/share/themes/
+    wget $server/files/ilux/papirus.tar.xz
+    tar --keep-newer-files --xz -xf papirus.tar.xz --directory /usr/share/icons/
+    wget $server/files/ilux/papirus-dark.tar.xz
+    tar --keep-newer-files --xz -xf papirus-dark.tar.xz --directory /usr/share/icons/
+    apt install -y  breeze
+    touch /opt/ilux/install/theme.lock
+  fi
+  
+  # Settings
+  #wget $server/buster/skel.tar.xz
+  #tar --keep-newer-files --xz -xf skel.tar.xz --directory /etc/skel/
+  echo ""
+  echo "Updating profiles"
+  cd /home/
+  for dest in $(ls -d *); do
+    echo $dest "..."
+    rsync -rlptDXu --chown=$dest:$dest  /etc/skel/ $dest/
+  done
+  cd ~/Downloads/ilux
+  
+  # Cleanup
+  apt remove -y mlterm mlterm-tiny mlterm-common khmerconverter libreoffice-math 2>/dev/null
+  ln -s /usr/bin/nautilus /usr/local/bin/nemo
+fi
+
+# LAMP setup --------------------------------------------
+case $@ in
+  *"lamp"* )
+    if [ -r /opt/ilux/install/lamp.lock ]
+    then
+      echo "LAMP already installed"
+    else
+      echo "LAMP setup"
+      
+      # Proxy
+      a2enmod proxy
+      a2enmod proxy_http
+      a2enmod proxy_ajp
+      a2enmod rewrite
+      a2enmod deflate
+      a2enmod headers
+      a2enmod proxy_balancer
+      a2enmod proxy_connect
+      a2enmod proxy_html
+      a2enmod headers
+      
+      echo "<VirtualHost *:80>" >> /etc/apache2/sites-enabled/rproxy1.conf
+      echo " ServerName $(hostname -f)" >> /etc/apache2/sites-enabled/rproxy1.conf
+      echo " ProxyPreserveHost On " >> /etc/apache2/sites-enabled/rproxy1.conf
+      echo " DocumentRoot /var/www/html" >> /etc/apache2/sites-enabled/rproxy1.conf
+      echo " ProxyPass /.well-known !" >> /etc/apache2/sites-enabled/rproxy1.conf
+      echo " ProxyPass / http://$(hostname -I)/" >> /etc/apache2/sites-enabled/rproxy1.conf
+      echo " ProxyPassReverse / http://$(hostname -I):80/" >> /etc/apache2/sites-enabled/rproxy1.conf
+      echo "</VirtualHost>" >> /etc/apache2/sites-enabled/rproxy1.conf
+      
+      #SSL
+      #openssl genrsa -out /etc/ssl/private/apache.key 2048
+      #openssl req -new -x509 -key /etc/ssl/private/apache.key -days 365 -sha256 -out /etc/ssl/certs/apache.crt
+      
+      #echo "<IfModule mod_ssl.c>" >> /etc/apache2/ports.conf
+      #echo "   Listen 443" >> /etc/apache2/ports.conf
+      #echo "</IfModule>" >> /etc/apache2/ports.conf
+      
+      #a2enmod ssl
+      #a2ensite ssl.conf
+      
+      #openssl req -new -key /etc/ssl/private/apache.key -out ./apache.csr
+      
+      certbot --apache
+      (crontab -l; echo "0 1 * * * /usr/bin/certbot renew & > /dev/nul") | crontab -
+      
+      case $@ in
+        *"full"* )
+          echo "Additional LAMP features"
+          
+          echo "" >> /etc/redis/redis.conf
+          #echo "maxmemory 512mb" >> /etc/redis/redis.conf
+          #echo "maxmemory-policy allkeys-lru" >> /etc/redis/redis.conf
+          echo "bind $(hostname -I)" >> /etc/redis/redis.conf
+          systemctl restart redis
+          usermod -a -G redis www-data
+          ;;
+      esac
+      systemctl restart apache2
+      touch /opt/ilux/install/lamp.lock
+    fi
+    ;;
+# Proxmox config --------------------------------------------
+    *"pve"* )
+      if [ -r /opt/ilux/install/pve.lock ]
+      then
+        echo "Proxmox VE already installed"
+      else
+        echo "$(hostname -I)    $(hostname)" >> /etc/hosts
+        systemctl stop postfix; systemctl disable postfix #for lab environments
+        touch /opt/ilux/install/pve.lock
+      fi
+      ;;
+# Server config --------------------------------------------
+      *"server"* )
+        echo "General server setup"
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        chmod a+r /etc/apt/keyrings/docker.gpg
+        
+        echo \
+        "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+        "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+        tee /etc/apt/sources.list.d/docker.list > /dev/null
+        apt update
+        apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        
+        apt remove aspell
+        
+        echo "" >> /etc/samba/smb.conf
+        echo "# [public]" >> /etc/samba/smb.conf
+        echo "# comment = smb share" >> /etc/samba/smb.conf
+        echo "# path = /srv/share/" >> /etc/samba/smb.conf
+        echo "# guest ok = yes" >> /etc/samba/smb.conf
+        echo "# read only = no" >> /etc/samba/smb.conf
+        echo "# create mode = 0644" >> /etc/samba/smb.conf
+        echo "# directory mode = 0755" >> /etc/samba/smb.conf
+        echo "# browseable = yes" >> /etc/samba/smb.conf
+        echo "" >> /etc/samba/smb.conf
+        echo "# Additional options:" >> /etc/samba/smb.conf
+        echo "# public = yes" >> /etc/samba/smb.conf
+        echo "# valid users = username" >> /etc/samba/smb.conf
+        echo "# writable = yes" >> /etc/samba/smb.conf
+        echo "# printable = no" >> /etc/samba/smb.conf
+        
+        systemctl restart smbd.service
+        
+        mkdir /var/log/clients
+        echo "" >> /etc/rsyslog.conf
+        echo "#Uncommend if this is the log-server" >> /etc/rsyslog.conf
+        echo '#$template remote-incoming-logs,"/var/log/clients/%HOSTNAME%/%PROGRAMNAME%.log"' >> /etc/rsyslog.conf
+        echo "#*.* ?remote-incoming-logs" >> /etc/rsyslog.conf
+esac
+
+# Core config --------------------------------------------
+if [ -r /opt/ilux/install/core.lock ]
+then
+  echo "Core already installed"
+else
+  echo "Core setup"
+
+  echo "" >> /etc/network/interfaces
+  echo "#auto eth0" >> /etc/network/interfaces
+  echo "#iface eth0 inet dhcp" >> /etc/network/interfaces
+  echo "" >> /etc/network/interfaces
+  echo "#iface eth0 inet static" >> /etc/network/interfaces
+  echo "#    address 192.168.1.X/24" >> /etc/network/interfaces
+  echo "#    gateway 192.168.1.1" >> /etc/network/interfaces
+  echo "#    dns-nameserver 192.168.1.1 8.8.8.8" >> /etc/network/interfaces.
+  
+  # rsyslog
+  echo "" >> /etc/rsyslog.conf
+  echo "#Uncommend the following blocks for logging to a server" >> /etc/rsyslog.conf
+  
+  echo "#Enable sending system logs over UDP to rsyslog server" >> /etc/rsyslog.conf
+  echo "#*.* @rsyslog-server-ip:514" >> /etc/rsyslog.conf
+  echo "" >> /etc/rsyslog.conf
+  echo "#Enable sending system logs over TCP to rsyslog server" >> /etc/rsyslog.conf
+  echo "#*.* @@rsyslog-server-ip:514" >> /etc/rsyslog.conf
+  
+  echo "" >> /etc/rsyslog.conf
+  echo "$ActionQueueFileName queue" >> /etc/rsyslog.conf
+  echo "$ActionQueueMaxDiskSpace 1g" >> /etc/rsyslog.conf
+  echo "$ActionQueueSaveOnShutdown on" >> /etc/rsyslog.conf
+  echo "$ActionQueueType LinkedList" >> /etc/rsyslog.conf
+  echo "$ActionResumeRetryCount -1" >> /etc/rsyslog.conf
+
+  mkdir -p /var/log/journal
+  echo "Storage=persistend" >> /etc/systemd/journald.conf
+  
+  flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+  
+  # reinstall rc.local because it was removed from Debian
+  wget $server/files/ilux/rc-local.service -O /etc/systemd/system/rc-local.service
+  wget $server/files/ilux/rc.local -O /etc/rc.local
+  chmod +x /etc/rc.local
+  systemctl enable rc-local
+  
+  wget $server/files/ilux/jail.local -O /etc/fail2ban/jail.local
+  systemctl restart fail2ban
+
+  echo "" >> /etc/fstab
+  echo "# Uncomment to move /tmp to memory:" >> /etc/fstab
+  echo "#tmpfs                         /tmp            tmpfs   noatime,nomand,nosuid  0  0" >> /etc/fstab
+  #nano /etc/fstab
+  
+  touch /opt/ilux/install/core.lock
+fi  
+
+apt clean
+
+#if [ -r /opt/ilux/install/fs.lock ]
+#then
+#  echo "Filesystem already configured"
+#else
+#  case $@ in
+#  *"fs"* )
+#    echo "#!/bin/sh" >> /root/bin/snap
+#    echo "" >> /root/bin/snap
+#    echo "stamp=$(date +%H%M)" >> /root/bin/snap
+#    echo "dir=var" >> /root/bin/snap # folder 
+#    echo "subv=/$dir" >> /root/bin/snap
+#    echo "snap=/.$dir-$stamp" >> /root/bin/snap
+#    echo "" >> /root/bin/snap
+#    echo "btrsnap() {" >> /root/bin/snap
+#    echo "" >> /root/bin/snap
+#    echo "btrfs sub del $snap" >> /root/bin/snap
+#    echo "btrfs sub snap $subv $snap" >> /root/bin/snap
+#    echo "}" >> /root/bin/snap
+#    echo "btrsnap" >> /root/bin/snap
+#    
+#    echo "(crontab -l; echo "# 0 3,15 * * * /root/bin/snap") | crontab -
+#    ;;
+#  esac
+#fi
+
+
+echo "Ilux on " $(cat /etc/issue.net) > /etc/issue
+echo $support >> /etc/issue
+echo "" >> /etc/issue
+
+echo $support > /etc/motd
+
+# Done --------------------------------------------
+echo ""
+echo $support
+echo ""
+echo "Done. Thank you for installing Ilux"
+echo ""
+case $@ in
+  *"lamp"* )
+    echo "Please verify"
+    echo " /etc/apache2/sites-enabled/rproxy1.conf"
+    ;;
+  *"server"* )
+    echo "Please check these configs"
+    echo " /etc/samba/smb.conf"
+    echo " /etc/rsyslog.conf"
+    ;;
+  *"pve"* )
+    echo "Please reboot to apply"
+    ;;
+esac
+case $@ in
+  *"cinnamon"* )
+    echo "Please reboot to apply"
+    ;;
+  *"gnome"* )
+    echo "Please reboot to apply"
+    ;;
+esac
+echo ""
