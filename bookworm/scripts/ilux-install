@@ -56,7 +56,13 @@ case $@ in
     ;;
   *"server"* )
     echo "General server installation"
-    instlist="$instlist atop cockpit cockpit-pcp nfs-kernel-server samba ca-certificates curl gnupg" #zfsutils-linux
+    instlist="$instlist atop cockpit cockpit-pcp ca-certificates curl gnupg" #zfsutils-linux
+    
+    case $@ in
+      *"full"* )
+        instlist="$instlist nfs-kernel-server samba"
+        ;;
+    esac
     
     mkdir -p /srv/share
     chmod 777 /srv/share
@@ -84,7 +90,7 @@ case $@ in
     echo "Some possible installations:"
     echo " [lamp full]         +php-modules,redis,..."
     echo " [cinnamon full office]     +gimp,vlc,clementine,steam,libreoffice..."
-    echo " [server gnome full] Docker,WebUI, +GUI, +sqlitebrowser..."
+    echo " [server gnome full] Docker, SMB ,WebUI, +GUI, +sqlitebrowser..."
     echo ""
     echo "For consulting or any kind of support visit www.kaai24.eu"
     exit
@@ -97,7 +103,7 @@ case $@ in
       echo "Please add (multiple choice possible)"
       echo ""
       echo " [core]     Minimal setup                CLI"
-      echo " [server]   Server with Docker,NFS,SMB   Web"
+      echo " [server]   Server with Docker           Web"
       echo " [lamp]     Webserver                    Web"
       echo " [pve]      Proxmox Virtualisation Env.  Web"
       echo " [cinnamon] Cinnamon desktop             GUI"
@@ -326,23 +332,28 @@ case $@ in
         
         apt remove aspell
         
-        echo "" >> /etc/samba/smb.conf
-        echo "# [public]" >> /etc/samba/smb.conf
-        echo "# comment = smb share" >> /etc/samba/smb.conf
-        echo "# path = /srv/share/" >> /etc/samba/smb.conf
-        echo "# guest ok = yes" >> /etc/samba/smb.conf
-        echo "# read only = no" >> /etc/samba/smb.conf
-        echo "# create mode = 0644" >> /etc/samba/smb.conf
-        echo "# directory mode = 0755" >> /etc/samba/smb.conf
-        echo "# browseable = yes" >> /etc/samba/smb.conf
-        echo "" >> /etc/samba/smb.conf
-        echo "# Additional options:" >> /etc/samba/smb.conf
-        echo "# public = yes" >> /etc/samba/smb.conf
-        echo "# valid users = username" >> /etc/samba/smb.conf
-        echo "# writable = yes" >> /etc/samba/smb.conf
-        echo "# printable = no" >> /etc/samba/smb.conf
-        
-        systemctl restart smbd.service
+        case $@ in
+          *"full"* )
+            
+            echo "" >> /etc/samba/smb.conf
+            echo "# [public]" >> /etc/samba/smb.conf
+            echo "# comment = smb share" >> /etc/samba/smb.conf
+            echo "# path = /srv/share/" >> /etc/samba/smb.conf
+            echo "# guest ok = yes" >> /etc/samba/smb.conf
+            echo "# read only = no" >> /etc/samba/smb.conf
+            echo "# create mode = 0644" >> /etc/samba/smb.conf
+            echo "# directory mode = 0755" >> /etc/samba/smb.conf
+            echo "# browseable = yes" >> /etc/samba/smb.conf
+            echo "" >> /etc/samba/smb.conf
+            echo "# Additional options:" >> /etc/samba/smb.conf
+            echo "# public = yes" >> /etc/samba/smb.conf
+            echo "# valid users = username" >> /etc/samba/smb.conf
+            echo "# writable = yes" >> /etc/samba/smb.conf
+            echo "# printable = no" >> /etc/samba/smb.conf
+            
+            systemctl restart smbd.service
+            ;;
+        esac        
         
         mkdir /var/log/clients
         echo "" >> /etc/rsyslog.conf
