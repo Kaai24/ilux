@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-version="Version 3.240420b"
+version="Version 3.240515b"
 support="For consulting or any kind of support visit www.kaai24.eu"
 server="http://www.kaai24.org/cli"
 
@@ -13,51 +13,38 @@ echo ""
 echo "ilux-install [OPTION...]"
 echo "--------------------------------------------"
 
+#@ Core
+# Min
+instlist=" apt-file btrfs-progs fail2ban htop ifupdown2 iotop openssh-server rsync rsyslog smartmontools sshfs sudo tree vim zip"
+# Recommended
+instlist="$instlist at powertop ethtool git lldpd mc nmon clamav clamav-freshclam clamav-daemon nfs-common dlocate smbclient cifs-utils flatpak"
+
 case $@ in
+  #@ Cinnamon desktop
   *"cinnamon"* )
     echo "Cinnamon desktop selected"
-    instlist="cinnamon-core"
+    instlist="$instlist cinnamon-core"
     touch /opt/ilux/install/desktop.lock
     ;;
+  #@ Gnome desktop
   *"gnome"* )
     echo "Gnome 3 desktop selected"
-    instlist="gnome-core"
+    instlist="$instlist gnome-core"
     touch /opt/ilux/install/desktop.lock
     ;;
 esac
 
-# Server setup --------------------------------------------
 case $@ in
   *"core"*)
     echo "Core installation"
     ;;
-  *"lamp"* )
-    echo "LAMP server selected"
-    instlist="$instlist atop cockpit cockpit-pcp apache2 php libapache2-mod-php python-certbot-apache"
-    # MariaDB
-    instlist="$instlist mariadb-server php-mysql"
-    
-    ln -s /var/www/html /srv/www
-    
-    case $@ in
-      *"full"* )
-        instlist="$instlist redis memcached libmemcached-tools"
-        # PHP
-        instlist="$instlist php-apcu php-gd php-imagick php-redis php-memcached" #php-memcache
-        ;;
-    esac
-    ;;
-  *"pve"* )
-    echo "Proxmox Virtual Environment selected"
-    echo "deb [arch=amd64] http://download.proxmox.com/debian/pve buster pve-no-subscription" > /etc/apt/sources.list.d/pve-install-repo.list
-    wget http://download.proxmox.com/debian/proxmox-ve-release-7.x.gpg -O /etc/apt/trusted.gpg.d/proxmox-ve-release-7.x.gpg
-    wget http://download.proxmox.com/debian/proxmox-ve-release-8.x.gpg -O /etc/apt/trusted.gpg.d/proxmox-ve-release-8.x.gpg
-    instlist="$instlist proxmox-ve postfix open-iscsi"
-    ;;
+  #@ Server ----------------------------------
   *"server"* )
     echo "General server installation"
     instlist="$instlist atop cockpit cockpit-pcp ca-certificates curl gnupg" #zfsutils-linux
+    docker=" docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin" #@
     
+    #@ Server FULL
     case $@ in
       *"full"* )
         instlist="$instlist nfs-kernel-server samba"
@@ -68,6 +55,35 @@ case $@ in
     chmod 777 /srv/share
     
     touch /opt/ilux/install/server.lock
+    ;;
+esac
+
+case $@ in
+  #@ LAMP
+  *"lamp"* )
+    echo "LAMP server selected"
+    instlist="$instlist atop cockpit cockpit-pcp apache2 php libapache2-mod-php python-certbot-apache"
+    # MariaDB
+    instlist="$instlist mariadb-server php-mysql"
+    
+    ln -s /var/www/html /srv/www
+    
+    #@ LAMP FULL
+    case $@ in
+      *"full"* )
+        instlist="$instlist redis memcached libmemcached-tools"
+        # PHP
+        instlist="$instlist php-apcu php-gd php-imagick php-redis php-memcached"
+        ;;
+    esac
+    ;;
+  #@ PVE
+  *"pve"* )
+    echo "Proxmox Virtual Environment selected"
+    echo "deb [arch=amd64] http://download.proxmox.com/debian/pve buster pve-no-subscription" > /etc/apt/sources.list.d/pve-install-repo.list
+    wget http://download.proxmox.com/debian/proxmox-ve-release-7.x.gpg -O /etc/apt/trusted.gpg.d/proxmox-ve-release-7.x.gpg
+    wget http://download.proxmox.com/debian/proxmox-ve-release-8.x.gpg -O /etc/apt/trusted.gpg.d/proxmox-ve-release-8.x.gpg
+    instlist="$instlist proxmox-ve postfix open-iscsi"
     ;;
 # Menu setup --------------------------------------------
   *"status"*)
@@ -83,16 +99,24 @@ case $@ in
     echo "$version"
     echo ""
     echo ""
-    echo " [full] switches the installation frome lite to a"
-    echo "        more complete solution for daily usage in"
-    echo "        creative and professional environments."
+    echo " [full]    switches the installation frome lite to a"
+    echo "           more complete solution for daily usage in"
+    echo "           creative and professional environments."
+    echo ""
+    echo " [details] Shows all details for all options"
     echo ""
     echo "Some possible installations:"
-    echo " [lamp full]         +php-modules,redis,..."
-    echo " [cinnamon full office]     +gimp,vlc,clementine,steam,libreoffice..."
-    echo " [server gnome full] Docker, SMB ,WebUI, +GUI, +sqlitebrowser..."
+    echo " [lamp full]            +php-modules,redis,..."
+    echo " [cinnamon full office] +gimp,vlc,clementine,steam,libreoffice..."
+    echo " [server gnome full]    Docker, SMB ,WebUI, +GUI, +sqlitebrowser..."
     echo ""
     echo "For consulting or any kind of support visit www.kaai24.eu"
+    exit
+    ;;
+  *"details"*)
+    echo "All packages"
+    echo ""
+    grep "#@\|instl" ilux-install | grep -v "grep" | sed s/instlist=//g | sed s/docker=//g | sed s/\$instlist//g | sed s/apt\ install\ -y//g | sed s/\ \ //g | sed s/\"//g
     exit
     ;;
   * )
@@ -119,19 +143,14 @@ case $@ in
     ;;
 esac
 
-# Core setup --------------------------------------------
-# Min
-instlist="$instlist apt-file btrfs-progs fail2ban htop ifupdown2 iotop openssh-server rsync rsyslog smartmontools sshfs sudo tree vim zip"
-# Recommended
-instlist="$instlist powertop ethtool git lldpd mc nmon clamav clamav-freshclam clamav-daemon nfs-common dlocate smbclient cifs-utils flatpak"
-
 # Desktop setup --------------------------------------------
 if [ -r /opt/ilux/install/desktop.lock ]
 then
-  # Lite
+  #@ Common desktop apps ----------------------
   instlist="$instlist gedit gnome-calculator gnome-screenshot eog nautilus gnome-disk-utility psensor terminator"
-  instlist="$instlist default-jre filezilla baobab gparted gpart clamtk clamtk-gnome synaptic ffmpeg radeontop gnome-software-plugin-flatpak"
+  instlist="$instlist default-jre filezilla baobab gparted gpart clamtk clamtk-gnome synaptic ffmpeg radeontop gnome-software-plugin-flatpak" #brave-browser
   
+  #@ Nvidia driver (if detected)
   lspci > lspci.tmp
   if grep -i "nvidia" lspci.tmp;
   then
@@ -141,9 +160,9 @@ then
   
   case $@ in
   *"full"* )
-    # Common
+    #@ Common desktop FULL
     instlist="$instlist dconf-editor clementine vlc gimp hardinfo grsync"
-    instlist="$instlist redshift gnome-mines gnome-chess"
+    instlist="$instlist redshift gnome-mines gnome-chess" #steam
     
     # Productive
     instlist="$instlist geany sqlitebrowser fonts-croscore gpaste putty"
@@ -153,7 +172,7 @@ then
   
   case $@ in
   *"office"* )
-    # Office
+    #@ Office
     instlist="$instlist libreoffice-writer libreoffice-calc"
     ;;
   esac
@@ -239,7 +258,8 @@ then
   cd ~/Downloads/ilux
   
   # Cleanup
-  apt remove -y mlterm mlterm-tiny mlterm-common khmerconverter libreoffice-math 2>/dev/null
+  apt remove -y mlterm mlterm-tiny mlterm-common termit khmerconverter libreoffice-math gnome-sushi 2>/dev/null
+  apt autoremove -y
   ln -s /usr/bin/nautilus /usr/local/bin/nemo
 fi
 
@@ -328,7 +348,7 @@ case $@ in
         "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
         tee /etc/apt/sources.list.d/docker.list > /dev/null
         apt update
-        apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        apt install -y $docker
         
         apt remove aspell
         
