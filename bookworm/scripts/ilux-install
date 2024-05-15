@@ -3,6 +3,7 @@
 version="Version 3.240515b"
 support="For consulting or any kind of support visit www.kaai24.eu"
 server="http://www.kaai24.org/cli"
+selected=0
 
 mkdir -p /opt/ilux/install/
 mkdir -p ~/Downloads/ilux
@@ -24,12 +25,14 @@ case $@ in
   *"cinnamon"* )
     echo "Cinnamon desktop selected"
     instlist="$instlist cinnamon-core"
+    selected=1
     touch /opt/ilux/install/desktop.lock
     ;;
   #@ Gnome desktop
   *"gnome"* )
     echo "Gnome 3 desktop selected"
     instlist="$instlist gnome-core"
+    selected=1
     touch /opt/ilux/install/desktop.lock
     ;;
 esac
@@ -37,6 +40,7 @@ esac
 case $@ in
   *"core"*)
     echo "Core installation"
+    selected=1
     ;;
   #@ Server ----------------------------------
   *"server"* )
@@ -50,10 +54,7 @@ case $@ in
         instlist="$instlist nfs-kernel-server samba"
         ;;
     esac
-    
-    mkdir -p /srv/share
-    chmod 777 /srv/share
-    
+    selected=1
     touch /opt/ilux/install/server.lock
     ;;
 esac
@@ -66,8 +67,6 @@ case $@ in
     # MariaDB
     instlist="$instlist mariadb-server php-mysql"
     
-    ln -s /var/www/html /srv/www
-    
     #@ LAMP FULL
     case $@ in
       *"full"* )
@@ -76,6 +75,7 @@ case $@ in
         instlist="$instlist php-apcu php-gd php-imagick php-redis php-memcached"
         ;;
     esac
+    selected=1
     ;;
   #@ PVE
   *"pve"* )
@@ -84,7 +84,9 @@ case $@ in
     wget http://download.proxmox.com/debian/proxmox-ve-release-7.x.gpg -O /etc/apt/trusted.gpg.d/proxmox-ve-release-7.x.gpg
     wget http://download.proxmox.com/debian/proxmox-ve-release-8.x.gpg -O /etc/apt/trusted.gpg.d/proxmox-ve-release-8.x.gpg
     instlist="$instlist proxmox-ve postfix open-iscsi"
+    selected=1
     ;;
+    
 # Menu setup --------------------------------------------
   *"status"*)
     echo "Installed roles"
@@ -123,7 +125,13 @@ case $@ in
     if [ -r /opt/ilux/install/desktop.lock ]
     then
       echo "Desktop installation"
-    else
+      selected=1
+    fi
+    ;;
+esac
+
+if [ $selected == 0 ]
+then
       echo "Please add (multiple choice possible)"
       echo ""
       echo " [core]     Minimal setup                CLI"
@@ -139,9 +147,7 @@ case $@ in
       echo " [status]   Show installed roles"
       echo " [help]     Show help"
       exit
-    fi
-    ;;
-esac
+fi
 
 # Desktop setup --------------------------------------------
 if [ -r /opt/ilux/install/desktop.lock ]
@@ -272,6 +278,8 @@ case $@ in
     else
       echo "LAMP setup"
       
+      ln -s /var/www/html /srv/www
+      
       # Proxy
       a2enmod proxy
       a2enmod proxy_http
@@ -339,6 +347,9 @@ case $@ in
 # Server config --------------------------------------------
       *"server"* )
         echo "General server setup"
+        mkdir -p /srv/share
+		chmod 777 /srv/share
+        
         install -m 0755 -d /etc/apt/keyrings
         curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
         chmod a+r /etc/apt/keyrings/docker.gpg
