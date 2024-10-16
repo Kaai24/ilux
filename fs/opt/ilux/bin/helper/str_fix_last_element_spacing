@@ -1,0 +1,47 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+  # Read input from stdin
+  input=$(cat)
+
+else
+  input="$1"
+fi
+
+if [ -z "$input" ]; then
+  echo "Missing input to format [string]"
+  exit 1
+fi
+
+# Arrays to store parts
+declare -a lines
+declare -a last_elements
+
+# Strip the last element of each line and store it
+while IFS= read -r line; do
+  last_element=$(echo "$line" | awk '{print $NF}') # Extract last element
+  stripped_line=$(echo "$line" | sed 's/ [^ ]*$//') # Remove last element
+
+  # Add 4 extra spaces for lines that contain └─ or ├─ for proper indentation
+  if [[ "$line" == *"├─"* || "$line" == *"└─"* ]]; then
+    last_element="    $last_element"
+  fi
+
+  lines+=("$stripped_line")
+  last_elements+=("$last_element")
+done <<< "$input"
+
+# Find the longest line
+max_length=0
+for line in "${lines[@]}"; do
+  len=${#line}
+  if (( len > max_length )); then
+    max_length=$len
+  fi
+done
+
+# Pad all lines to the length of the longest one and reapply the last element
+for i in "${!lines[@]}"; do
+  printf "%-${max_length}s %s\n" "${lines[$i]}" "${last_elements[$i]}"
+done
+

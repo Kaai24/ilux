@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# This script is in the public domain.
+# You can use, modify, and distribute it without any restrictions.
+# For more information, see <https://creativecommons.org/publicdomain/zero/1.0/>.
+
+# Made by kaai24.eu for the Ilux distribution.
+
+#Default options, check: "man tree" or https://linux.die.net/man/1/tree
+arguments="-CpughDl"
+
+#Limit of lines to print the output without asking
+limit=100
+
+source ~/.config/ilux/lt.conf 2>/dev/null || source /opt/ilux/conf/lt.conf 2>/dev/null
+
+treeout=$(tree "$arguments" "$@")
+
+case "$@" in
+  --help)
+    tree --help
+    exit 0
+    ;;
+  --version)
+    tree --version
+    echo -e "\nWrapper for Ilux, written by kaai24.eu"
+    echo -e "Details at kaai24.eu/Ilux-commands"
+    exit 0
+    ;;
+esac
+
+# Check if it runs in an interactive terminal, if not just dump the input
+if [ ! -t 1 ]; then
+  echo "$treeout"
+  exit 0
+fi
+
+# Load the LS_COLORS variable into dircolors format
+eval $(dircolors -b)
+
+# Extract color codes from LS_COLORS for directories and symlinks
+DIR_COLOR=$(echo $LS_COLORS | grep -o 'di=[^:]*' | head -n 1 | cut -d= -f2)
+LINK_COLOR=$(echo $LS_COLORS | grep -o 'ln=[^:]*' | head -n 1 | cut -d= -f2)
+
+# Wrap the extracted colors in ANSI escape sequences
+DIR_COLOR="\033[${DIR_COLOR}m"
+LINK_COLOR="\033[${LINK_COLOR}m"
+RESET_COLOR='\033[0m' 
+
+# Count the number of lines in the treeout
+line_count=$(echo "$treeout" | wc -l)
+
+# Check if the treeout has more lines
+if [ "$line_count" -gt $limit ]; then
+
+  # Ask the user if they want to see the treeout
+  read -p "There are $line_count lines. Are you sure? 'y' " choice
+  
+  # If the user presses anything else, exit
+  if [ -n "$choice" ] && [ "$choice" != "y" ]; then exit 0; fi
+  
+fi
+  
+# Process each line of $treeout
+echo "$treeout" | while IFS= read -r line; do
+
+  # Check if the line contains '[d' for directories
+  if [[ "$line" == *"[d"* ]]; then
+    # Print the line in the directory color
+    echo -e "${DIR_COLOR}${line}${RESET_COLOR}"
+
+  # Check if the line contains '[l' for symlinks
+  elif [[ "$line" == *"[l"* ]]; then
+    # Print the line in the symlink color
+    echo -e "${LINK_COLOR}${line}${RESET_COLOR}"
+
+  else
+    # Print the line without any color
+    echo "$line"
+  fi
+done
+

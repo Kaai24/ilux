@@ -1,0 +1,84 @@
+#!/bin/bash
+
+# This script is in the public domain.
+# You can use, modify, and distribute it without any restrictions.
+# For more information, see <https://creativecommons.org/publicdomain/zero/1.0/>.
+
+# Made by kaai24.eu for the Ilux distribution.
+
+# Editor to use
+editor="vim"
+
+# Backup opened files
+autobak=true
+
+# VIM config
+vimrc="$HOME/.vimrc"
+
+source ~/.config/ilux/vim.conf 2>/dev/null || source /opt/ilux/conf/vim.conf 2>/dev/null
+
+runvim() {
+	# Verifiy settings
+  if [[ "$editor" != *"vi"* ]] || [[ " $@ " == *" -u "* ]]; then
+    "$editor" "$@"
+
+  # Load vimrc
+  else    
+    vimrctmp="$HOME/.cache/.vimrc.tmp"
+    
+    echo -e "\" Generated config\n" > "$vimrctmp"
+    cat "$vimrc" > "$vimrctmp" 2>/dev/null
+    cat /opt/ilux/conf/vimrc >> "$vimrctmp" 2>/dev/null
+    
+    args=("-u" "$vimrctmp" "$@")
+    "$editor" "${args[@]}"
+#    "$editor" -u "$vimrctmp" "$@"
+    
+    rm "$vimrctmp"
+  fi
+}
+
+backup() {
+  echo -e "Autobackup is enabled"
+  if [ -f "$1" ]; then
+    /opt/ilux/bin/bak $1
+    echo ""
+  else
+    echo "But \"$1\" is not a file"
+  fi
+}
+
+case "$@" in
+  -h|--help)
+    vim --help
+    exit 0
+    ;;
+  --version)
+    vim --version
+    echo -e "\nWrapper for Ilux, written by kaai24.eu"
+    echo -e "Details at kaai24.eu/Ilux-commands"
+    exit 0
+    ;;
+esac
+
+# Show warning
+if [ -t 1 ] && ! grep -q "i am silly" "$vimrc"; then
+
+  echo -e "Since this is the first time you are launching VIM,\nyou should know that it doesn't comply with any common sense, workflows or well known standards."
+  echo -e "You need to know what you are getting into or for safety's sake use nano.\n"
+  
+  read -p "If you understood this warning and still want to continue with VIM enter 'i am silly' " choice
+  
+  if [[ "$choice" != "i am silly" ]]; then
+    nano "$@"
+  
+  # i am silly
+  else
+    echo -e "\n\"i am silly" >> "$vimrc"
+  fi
+fi
+
+if grep -q "i am silly" "$vimrc"; then
+  if [[ "$autobak" == "true" ]]; then backup "$1"; fi
+  runvim "$@"
+fi

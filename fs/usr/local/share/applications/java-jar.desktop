@@ -1,0 +1,8 @@
+[Desktop Entry]
+
+Type=Application
+Terminal=false
+Exec=/usr/bin/java -jar %U
+Name=Java
+Icon=java
+Categories=Development

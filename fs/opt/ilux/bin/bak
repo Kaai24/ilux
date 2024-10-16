@@ -1,0 +1,166 @@
+#!/bin/bash -e
+
+# Easy creation and restoration of local backups
+
+# Timestamp to append to filenames
+# %year%month%day-%Hour%Minute in two digits, %S for %Second, %V for ISO-8601 weeknr, %b month like "Oct", %a day like "Thu" if needed.
+# See "man date" or https://linux.die.net/man/1/date
+tstamp=$(date +"%y%m%d-%H%M")
+
+# Compression options (extract uses archive suffix)
+# --bzip2, --xz, --lzip, --lzma, --lzop, --gzip, --zstd
+compressmode="--gzip"
+
+source ~/.config/ilux/bak.conf 2>/dev/null || source /opt/ilux/conf/bak.conf 2>/dev/null
+
+help() {
+  echo "Usage: $0 [e|c|d|r|s|v|x|z] TARGET"
+  echo ""
+  echo "Creates a backup of a file or directory with the current time in the name"
+  echo ""
+  echo "-c Creates a copy, not a compressed file (default for files)"
+  echo "-r Restores (extracts) the content of a tar backup (not overwriting)"
+  echo "-s Create backups in a bak/ subfolder"
+  echo "-v Verbose mode for more details"
+  echo "-x Same as -r"
+  echo "-z Creates a compressed tar file (default for directories)"
+  echo ""
+  echo "-e Encrypts a file using openssl AES-256-CBC with salt, asks for a password"
+  echo "-d Decrypts a file"
+  echo ""
+  echo "--help    Displays this help"
+  echo "--version Output information about this"
+  echo ""
+  echo "Settings for timestamp and compression in /opt/ilux/conf/bak.conf"
+  echo "Compression is set to $(echo "$compressmode" | cut -c 3-)"
+}
+
+if [ -z "$1" ]; then
+  echo "Missing input. Use --help for usage details"
+  exit 1
+fi
+
+case "$1" in
+  --help)
+    help
+    exit 0
+    ;;
+  --version)
+    echo -e "Written for Ilux by kaai24.eu"
+    echo -e "Details at kaai24.eu/Ilux-commands"
+    exit 0
+    ;;
+esac
+
+# Evaluate inputs
+if [[ -n "$3" ]]; then
+  echo "Too many arguments!"
+  echo "For multiple options use the merged format like -ze or -xdv"
+  exit 1
+fi
+
+if [[ "$1" == -* ]]; then
+  options="$1"
+  target="$2"
+else
+  options="$2"
+  target="$1"
+fi
+
+# Check if options are present
+if [[ "$options" == -* ]]; then
+  if [[ "$options" == *"v"* ]]; then
+    verbose="-v"
+  else
+    verbose=""
+  fi
+  
+  # Decrypt
+  if [[ "$options" == *"d"* ]]; then
+    echo "Decrypting $target"
+    tmp="$target.tmp"
+    openssl enc -aes-256-cbc -d -pbkdf2 -in "$target" -out "$tmp"
+    
+    target="$(echo "$target" | rev | cut -d'.' -f2- | rev)"
+    mv "$tmp" "$target"
+  fi
+  
+  # Restore / extract
+  if [[ "$options" == *"r"* ]] || [[ "$1" == *"x"* ]]; then
+    echo "Extracting $target"
+    tar --keep-old-files $verbose -xaf "$target"
+    
+    # Clean up decrypted archive
+    if [[ "$options" == *"d"* ]]; then rm "$target"; fi
+    
+    # Remove extensions from filename
+    target=$(echo "$target" | rev | cut -d'.' -f4- | rev)
+    
+    if [ -v verbose ]; then echo ""; fi
+    du -h "$target"*
+    
+    exit
+  fi
+  
+  if [[ "$options" == *"z"* ]]; then compress=1; fi
+  if [[ "$options" == *"c"* ]]; then copy=1; fi
+  if [[ "$options" == *"s"* ]]; then subdir=1; fi
+  if [[ "$options" == *"e"* ]]; then encrypt=1; fi
+fi
+  
+# Create a backup
+if [ -e "$target" ]; then
+  if [ -v subdir ]; then
+    echo "Writing to bak/"
+    mkdir -p bak/
+    newfile="bak/$target.$tstamp"
+  else
+    newfile="$target.$tstamp"
+  fi
+  
+  # Make tar
+  if [[ -d "$target" && -z "$copy" ]] || [[ -v compress ]]; then
+    
+    if   [[ "$compressmode" == "--bzip2" ]]; then ctype="bz2"
+    elif [[ "$compressmode" == "--xz" ]];    then ctype="xz"
+    elif [[ "$compressmode" == "--lzip" ]];  then ctype="lz"
+    elif [[ "$compressmode" == "--lzma" ]];  then ctype="lzma"
+    elif [[ "$compressmode" == "--lzop" ]];  then ctype="lzo"
+    elif [[ "$compressmode" == "--gzip" ]];  then ctype="gz"
+    elif [[ "$compressmode" == "--zstd" ]];  then ctype="zst"
+    else echo "Unexpected compressmode: $compressmode" && exit 1
+    fi
+    newfile="$newfile.tar.$ctype"
+    
+    echo "Using tar with $(echo "$compressmode" | cut -c 3-) for $newfile"
+    tar -c $verbose "$compressmode" -f "$newfile" "$target"
+  
+  # Just copy
+  else
+    if [ -f "$target" ]; then newfile="$newfile.bak"; fi
+    echo "Copy to $newfile"
+    cp $verbose -a "$target" "$newfile"
+  fi
+  
+  # Encrypt
+  if [[ -v encrypt ]]; then
+    echo "Encrypting with openssl AES-256-CBC and salt"
+    openssl enc -aes-256-cbc -pbkdf2 -salt -in "$newfile" -out "$newfile".enc
+    
+    rm "$newfile"
+    newfile="$newfile.enc"
+  fi
+  
+  # Result
+  if [ -v verbose ]; then echo ""; fi
+  if [ -v subdir ]; then
+    du -sh "$target"
+    du -sh "$newfile"
+  else
+    du -sch "$target"*
+  fi
+  
+else
+  echo "Can not find $(realpath $target)"
+  exit 1
+fi

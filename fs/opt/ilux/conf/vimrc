@@ -1,0 +1,4 @@
+" Security
+cmap w! echoerr "Cannot force write"
+cmap wq! echoerr "Cannot force write"
+cmap qw! echoerr "Cannot force write"

@@ -1,0 +1,123 @@
+#!/bin/bash
+
+# This script is in the public domain.
+# You can use, modify, and distribute it without any restrictions.
+# For more information, see <https://creativecommons.org/publicdomain/zero/1.0/>.
+
+# Made by kaai24.eu for the Ilux distribution.
+
+# This is a wrapper for lsblk that for the primary goal to add an "ID" column with the device ID from /dev/disk/by-id/
+# It supports most 
+
+# Known bugs:
+# -A -H -N -v -y  Show "invalid option" but still output data
+# -a -p           Wrong output in ID field
+# -D -m -n -t -z  IDs are not aligned (but this is a bug in /opt/ilux/bin/helper/str_fix_last_element_spacing)
+# -M              Could not be tested yet
+#
+# Turns out field MODEL holds the same information as our ID: -o +MODEL
+
+options="$@"
+lsblk_output=$(/usr/bin/lsblk $options)
+
+# Initialize an empty variable to store the final output
+final_output=""
+
+case "$options" in
+  *-P*|--pairs*|-J*|--json*)
+    nohead=1
+    alt=1
+    ;;
+    
+  *-r*|--raw*)
+    alt=1
+    ;;
+
+  *-h*|--help*)
+    alt=1
+    echo -e "$lsblk_output"
+    echo -e "\nIn addition for Ilux:"
+    echo -e "          ID  device ID"
+    exit 0
+    ;;
+    
+  *-V*|--version*)
+    alt=1
+    echo -e "$lsblk_output"
+    echo -e "wrapper script from Ilux"
+    exit 0
+    ;;
+    
+  *)
+    alt=0
+    ;;
+esac
+
+# Skip or add the header
+if [[ $nohead == 1 ]] || [[ "$options" == *"-n"* ]] || [[ "$options" == *"--noheadings"* ]]; then
+  # No header
+  nohead=1;
+else
+  # Header
+  header=$(echo "$lsblk_output" | head -n 1)
+  final_output+="$header ID\n"
+  lsblk_output=$(echo "$lsblk_output" | tail -n +2)
+fi
+
+# Use a while loop in the current shell to process lsblk output line by line
+while IFS= read -r line; do
+  
+  if [[ "$options" == *"-J"* ]] || [[ "$options" == *"--json"* ]]; then
+    # Check if the line contains the "name" field
+		if [[ "$line" == *"\"name\":"* ]]; then
+			# Extract the device name from JSON format
+			dev_name=$(echo "$line" | awk -F'"name":"' '{print $2}' | cut -d'"' -f1)
+
+			# Find the corresponding by-id symlink that exactly matches the device name
+			dev_by_id=$(ls -l /dev/disk/by-id/ | grep -v wwn | grep -w "$dev_name" | awk '{print $9}')
+
+			# Append the ID field to the JSON object
+			if [[ "$line" == *"}"* ]]; then
+				# If the line ends with }, add the ID field before the closing }
+				final_output+=$(echo "$line" | sed 's/}/, "ID":"'"$dev_by_id"'"}/')"\n"
+			else
+				# For other lines
+				final_output+="$line \"ID\":\"$dev_by_id\",\n"
+			fi
+		else
+			# If no "name" field, simply add the line as it is
+			final_output+="$line\n"
+		fi
+  
+  elif [[ "$options" == *"-P"* ]] || [[ "$options" == *"--pairs"* ]]; then
+    
+		# Parse the key-value pairs in the -P format
+		dev_name=$(echo "$line" | awk -F'NAME="' '{print $2}' | cut -d'"' -f1)
+
+		# Find the corresponding by-id symlink that exactly matches the device name
+		dev_by_id=$(ls -l /dev/disk/by-id/ | grep -v wwn | grep -w "$dev_name" | awk '{print $9}')
+		
+		final_output+="$line ID=\"$dev_by_id\"\n"
+
+	else
+	  # Logic for standard output format
+		# Extract the device name
+		dev_name=$(echo "$line" | awk '{print $1}' | sed 's/[^a-zA-Z0-9]//g')
+
+		# Find the corresponding by-id symlink that exactly matches the device name
+		dev_by_id=$(ls -l /dev/disk/by-id/ | grep -v wwn | grep -w "$dev_name" | awk '{print $9}')
+
+		# Append the line and the corresponding by-id symlink
+		if [ -n "$dev_by_id" ]; then
+			final_output+="$line $dev_by_id\n"
+		else
+			final_output+="$line \n"
+		fi
+	fi
+done <<< "$lsblk_output"  # Process lsblk output after skipping the header
+
+if [[ $alt == 1 ]]; then
+  echo -e "$final_output"
+else
+  echo -e "$final_output" | /opt/ilux/bin/helper/str_fix_last_element_spacing
+fi
