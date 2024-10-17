@@ -6,6 +6,8 @@
 
 # Made by kaai24.eu for the Ilux distribution.
 
+version=2.241017
+
 #Limit for yellow greater than use%
 warn1=79
 
@@ -92,6 +94,12 @@ filter() {
   if echo -e "$input" | grep -q /dev/; then
     header="$(echo "$input" | grep Mounted)"
     input="$(echo "$input" | grep -v Mounted | egrep "$filter")"
+    
+    if [[ -z $input ]]; then
+      echo "No mounts with $filter"
+      exit 1
+    fi
+    
     input="$header\n$input"
   fi
 }
@@ -178,7 +186,7 @@ while [ $i -lt ${#args[@]} ]; do
       ;;
     --version)
       /bin/df --version
-      echo -e "\nWrapper for Ilux, written by kaai24.eu"
+      echo -e "\nWrapper v$version for Ilux, written by kaai24.eu"
       echo -e "Details at kaai24.eu/Ilux-commands"
       exit 0
       ;;

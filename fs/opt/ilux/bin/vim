@@ -6,6 +6,8 @@
 
 # Made by kaai24.eu for the Ilux distribution.
 
+version=2.241017
+
 # Editor to use
 editor="vim"
 
@@ -55,7 +57,7 @@ case "$@" in
     ;;
   --version)
     vim --version
-    echo -e "\nWrapper for Ilux, written by kaai24.eu"
+    echo -e "\nWrapper v$version for Ilux, written by kaai24.eu"
     echo -e "Details at kaai24.eu/Ilux-commands"
     exit 0
     ;;

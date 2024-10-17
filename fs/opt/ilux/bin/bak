@@ -2,6 +2,8 @@
 
 # Easy creation and restoration of local backups
 
+version=1.241017
+
 # Timestamp to append to filenames
 # %year%month%day-%Hour%Minute in two digits, %S for %Second, %V for ISO-8601 weeknr, %b month like "Oct", %a day like "Thu" if needed.
 # See "man date" or https://linux.die.net/man/1/date
@@ -11,22 +13,27 @@ tstamp=$(date +"%y%m%d-%H%M")
 # --bzip2, --xz, --lzip, --lzma, --lzop, --gzip, --zstd
 compressmode="--gzip"
 
+# Default options (no spaces or -)
+arguments=""
+
 source ~/.config/ilux/bak.conf 2>/dev/null || source /opt/ilux/conf/bak.conf 2>/dev/null
 
 help() {
-  echo "Usage: $0 [e|c|d|r|s|v|x|z] TARGET"
+  echo "Usage: $0 [e|c|d|q|r|s|v|x|z] TARGET"
   echo ""
   echo "Creates a backup of a file or directory with the current time in the name"
   echo ""
   echo "-c Creates a copy, not a compressed file (default for files)"
   echo "-r Restores (extracts) the content of a tar backup (not overwriting)"
   echo "-s Create backups in a bak/ subfolder"
-  echo "-v Verbose mode for more details"
   echo "-x Same as -r"
   echo "-z Creates a compressed tar file (default for directories)"
   echo ""
   echo "-e Encrypts a file using openssl AES-256-CBC with salt, asks for a password"
   echo "-d Decrypts a file"
+  echo ""
+  echo "-q Less output but not quiet. Can be used together with -v"
+  echo "-v Verbose mode for more details from cp and tar"
   echo ""
   echo "--help    Displays this help"
   echo "--version Output information about this"
@@ -46,6 +53,7 @@ case "$1" in
     exit 0
     ;;
   --version)
+    echo -e "bak v$version\n"
     echo -e "Written for Ilux by kaai24.eu"
     echo -e "Details at kaai24.eu/Ilux-commands"
     exit 0
@@ -66,6 +74,9 @@ else
   options="$2"
   target="$1"
 fi
+
+# Apply defaults
+options="$options$arguments"
 
 # Check if options are present
 if [[ "$options" == -* ]]; then
@@ -102,10 +113,12 @@ if [[ "$options" == -* ]]; then
     exit
   fi
   
-  if [[ "$options" == *"z"* ]]; then compress=1; fi
   if [[ "$options" == *"c"* ]]; then copy=1; fi
-  if [[ "$options" == *"s"* ]]; then subdir=1; fi
   if [[ "$options" == *"e"* ]]; then encrypt=1; fi
+  if [[ "$options" == *"q"* ]]; then quiet=1; fi
+  if [[ "$options" == *"s"* ]]; then subdir=1; fi
+  if [[ "$options" == *"z"* ]]; then compress=1; fi
+  
 fi
   
 # Create a backup
@@ -152,12 +165,14 @@ if [ -e "$target" ]; then
   fi
   
   # Result
-  if [ -v verbose ]; then echo ""; fi
-  if [ -v subdir ]; then
-    du -sh "$target"
-    du -sh "$newfile"
-  else
-    du -sch "$target"*
+  if [ ! -v quiet ]; then
+    if [ -v verbose ]; then echo ""; fi
+    if [ -v subdir ]; then
+      du -sh "$target"
+      du -sh "$newfile"
+    else
+      du -sch "$target"*
+    fi
   fi
   
 else
