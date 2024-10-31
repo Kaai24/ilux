@@ -6,7 +6,7 @@
 
 # Made by kaai24.eu for the Ilux distribution.
 
-version=2.241017
+version=2.241021
 
 # Editor to use
 editor="vim"
@@ -66,13 +66,15 @@ esac
 # Show warning
 if [ -t 1 ] && ! grep -q "i am silly" "$vimrc"; then
 
-  echo -e "Since this is the first time you are launching VIM,\nyou should know that it doesn't comply with any common sense, workflows or well known standards."
+  echo -e "Since this is the first time you are launching Vim,\nyou should know that it doesn't comply with any common sense, workflows or well known standards."
   echo -e "You need to know what you are getting into or for safety's sake use nano.\n"
   
-  read -p "If you understood this warning and still want to continue with VIM enter 'i am silly' " choice
+  echo -e "An overview of Vi and Vim is available at kaai24.eu/vi\n"
+  
+  read -p "If you understood this warning and still want to continue with Vim enter 'i am silly' " choice
   
   if [[ "$choice" != "i am silly" ]]; then
-    nano "$@"
+    nano -c "$@"
   
   # i am silly
   else

@@ -2,7 +2,7 @@
 
 # Easy creation and restoration of local backups
 
-version=1.241017
+version=1.241024
 
 # Timestamp to append to filenames
 # %year%month%day-%Hour%Minute in two digits, %S for %Second, %V for ISO-8601 weeknr, %b month like "Oct", %a day like "Thu" if needed.
@@ -43,7 +43,8 @@ help() {
 }
 
 if [ -z "$1" ]; then
-  echo "Missing input. Use --help for usage details"
+  echo "Missing input"
+  echo "Use --help for usage details"
   exit 1
 fi
 
@@ -80,6 +81,17 @@ options="$options$arguments"
 
 # Check if options are present
 if [[ "$options" == -* ]]; then
+
+  # Options
+  if [[ "$options" == *"c"* ]]; then copy=1; fi
+  if [[ "$options" == *"e"* ]]; then encrypt=1; fi
+  if [[ "$options" == *"q"* ]]; then quiet=1; fi
+  if [[ "$options" == *"r"* ]]; then extract=1; fi
+  if [[ "$options" == *"s"* ]]; then subdir=1; fi
+  if [[ "$options" == *"x"* ]]; then extract=1; fi
+  if [[ "$options" == *"z"* ]]; then compress=1; fi
+  
+  # Verbose argument
   if [[ "$options" == *"v"* ]]; then
     verbose="-v"
   else
@@ -94,35 +106,51 @@ if [[ "$options" == -* ]]; then
     
     target="$(echo "$target" | rev | cut -d'.' -f2- | rev)"
     mv "$tmp" "$target"
+    
+    # If there is no extract
+    if [ ! -v extract ]; then
+      # Remove extensions from filename string
+      target=$(echo "$target" | rev | cut -d'.' -f3- | rev)
+      
+      if [ ! -v quiet ]; then
+        du -h "$(realpath $target)"*
+      fi
+      
+      exit
+    fi
+    
   fi
   
   # Restore / extract
-  if [[ "$options" == *"r"* ]] || [[ "$1" == *"x"* ]]; then
+  if [ -v extract ]; then
     echo "Extracting $target"
     tar --keep-old-files $verbose -xaf "$target"
     
     # Clean up decrypted archive
     if [[ "$options" == *"d"* ]]; then rm "$target"; fi
     
-    # Remove extensions from filename
+    # Remove extensions from filename string
     target=$(echo "$target" | rev | cut -d'.' -f4- | rev)
     
-    if [ -v verbose ]; then echo ""; fi
-    du -h "$target"*
+    if [ ! -v quiet ]; then
+      if [ -v verbose ]; then echo ""; fi
+      
+      du -h "$(realpath $target)"*
+    fi
     
     exit
   fi
   
-  if [[ "$options" == *"c"* ]]; then copy=1; fi
-  if [[ "$options" == *"e"* ]]; then encrypt=1; fi
-  if [[ "$options" == *"q"* ]]; then quiet=1; fi
-  if [[ "$options" == *"s"* ]]; then subdir=1; fi
-  if [[ "$options" == *"z"* ]]; then compress=1; fi
-  
 fi
   
 # Create a backup
-if [ -e "$target" ]; then
+if [ ! -e "$target" ]; then
+
+  echo "Can not find $(realpath $target)"
+  echo "Use --help for usage details"
+  exit 1
+
+else
   if [ -v subdir ]; then
     echo "Writing to bak/"
     mkdir -p bak/
@@ -156,26 +184,29 @@ if [ -e "$target" ]; then
   fi
   
   # Encrypt
-  if [[ -v encrypt ]]; then
+  if [[ -v encrypt ]] && [ -f "$newfile" ]; then
     echo "Encrypting with openssl AES-256-CBC and salt"
     openssl enc -aes-256-cbc -pbkdf2 -salt -in "$newfile" -out "$newfile".enc
     
     rm "$newfile"
     newfile="$newfile.enc"
+  
+  elif [[ -v encrypt ]] && [ -d "$newfile" ]; then
+    echo "Can't encrypt a folder. It has to be an archive"
   fi
   
   # Result
   if [ ! -v quiet ]; then
-    if [ -v verbose ]; then echo ""; fi
+    if [ -v verbose ]; then
+      echo ""
+    fi
+    
     if [ -v subdir ]; then
-      du -sh "$target"
-      du -sh "$newfile"
+      du -sh "$(realpath $target)"
+      du -sh "$(realpath $newfile)"
     else
-      du -sch "$target"*
+      du -sch "$(realpath $target)"*
     fi
   fi
   
-else
-  echo "Can not find $(realpath $target)"
-  exit 1
 fi

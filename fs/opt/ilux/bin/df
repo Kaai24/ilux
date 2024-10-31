@@ -6,7 +6,7 @@
 
 # Made by kaai24.eu for the Ilux distribution.
 
-version=2.241017
+version=2.241031
 
 #Limit for yellow greater than use%
 warn1=79
@@ -121,6 +121,16 @@ processDf() {
 
       # Convert Avail to a number (removing the unit G)
       avail_value=$(echo "$avail" | sed 's/[A-Za-z]//g')
+      
+      # If avail_value is in T multiply by 1024
+      if [[ $avail == *T* ]]; then
+        avail_value=$(echo "$avail_value * 1024" | bc)
+      fi
+      
+      # remove the decimal point
+      if [[ $avail_value == *.* ]]; then
+        avail_value=$(echo "$avail_value" | awk '{printf "%.0f", $0}')
+      fi
 
       # If "Use%" is not empty and is a valid number, apply color rules
       if [[ "$usep" =~ ^[0-9]+$ ]]; then

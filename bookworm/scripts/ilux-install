@@ -228,7 +228,7 @@ if [ $desktop = 1 ]; then
   #@ Nvidia driver (if detected)
   if grep -i "nvidia" <(lspci); then
     echo "Found Nvidia device"
-    optlist="$optlist nvidia-driver"
+    optlist="$optlist nvidia-driver nvtop"
   fi
   if grep -i "radeon" <(lspci); then
     echo "Found Radeon device"
@@ -298,6 +298,7 @@ optlist=$(sed '1d' "$conf_file")
 
 instlist="$instlist $optlist"
 
+#@ pkg2var
 # Reading some packages as options
 # These will be removed from the instlist and handled seperatly further down
 
