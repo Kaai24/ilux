@@ -1,0 +1,7 @@
+# WIP!
+docker build -t ilux:latest -<<EOF
+FROM debian:bullseye
+RUN apt-get update && apt-get install -y git htop mc openssh-server sshfs rsync tree vim zip
+EOF
+  && echo 'memory_limit = 256M' >> /usr/local/etc/php/conf.d/docker-php-memlimit.ini
+EOF

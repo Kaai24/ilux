@@ -7,6 +7,7 @@ alias rm='rm -i'
 # easing
 alias nano='nano -c'
 alias lsblk='lsblk -o +MODEL'
+alias rsync='rsync -h'
 
 # Ilux
 alias bak=/opt/ilux/bin/bak

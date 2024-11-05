@@ -1,0 +1,873 @@
+#!/bin/bash -e
+
+# Installation for the Ilux distibution.
+# For more information and updates visit
+#
+# kaai24.eu/?s=Ilux-installation-script
+# github.com/Kaai24/ilux
+
+support="For consulting or any kind of support visit www.kaai24.eu"
+
+version="241105"
+ILUXVERSION="0.2411"
+server="https://www.kaai24.org/cli"
+
+logfile="ilux-install-$(date +"%Y%m%d-%H%M%S").log"
+conf_file="optlist.conf"
+indev=1
+
+# ------------------------------------------------
+
+
+help () {
+  echo "Usage: $0 [OPTIONS]"
+  echo ""
+  echo "Run without OPTIONS to see the menu"
+}
+
+if [[ " $@ " == *" -h "* ]] || [[ " $@ " == *" --help "* ]]; then
+  help
+  exit
+fi
+
+if [[ " $@ " == *" -n "* ]]; then
+  drymode="true"
+  set +e
+  
+else
+  if [ -d "Downloads" ]; then
+    downloadpath="Downloads/ilux"
+  else
+    downloadpath="ilux"
+  fi
+fi
+
+echo "Ilux installation"
+echo ""
+
+if ! wget --spider --quiet "$server"; then
+
+	echo "Download server $server is not reachable"
+	echo ""
+fi
+
+# This should show a notification if there is an updated version available and ask if it should update
+	
+
+if [ -s "$conf_file" ]; then
+  echo "There is a file with your additional packages already prepared as $conf_file"
+  echo "No further recommended packages will be added!"
+  echo ""
+fi
+
+echo "ilux-install [OPTION...]"
+echo "--------------------------------------------------------------"
+
+selected=0
+desktop=0
+
+#@ Core
+installpath="/opt/ilux/install"
+
+# Min
+instlist="apt-transport-https btrfs-progs curl flatpak gnupg htop ifupdown2 iotop mc nfs-common openssh-server rsync smartmontools smbclient cifs-utils sshfs sudo tree vim zip"
+optlist="fail2ban rsyslog"
+# Recommended
+instlist="$instlist apt-file at bc powertop ethtool git iptables-persistent nmon" #lsscsi
+optlist="$optlist lldpd dlocate"
+
+case $@ in
+  #@ ClamAV
+  *"clamav"* )
+    echo "ClamAV selected"
+    instlist="$instlist clamav clamav-freshclam clamav-daemon"
+    touch $installpath/clamav.lock
+    ;;
+esac
+
+case $@ in
+  #@ Cinnamon desktop
+  *"cinnamon"* )
+    echo "Cinnamon desktop selected"
+    instlist="$instlist cinnamon-core"
+    selected=1
+    desktop=1
+    ;;
+  #@ Gnome desktop
+  *"gnome"* )
+    echo "Gnome 3 desktop selected"
+    instlist="$instlist gnome-core"
+    selected=1
+    desktop=1
+    ;;
+esac
+
+case $@ in
+  *"core"*)
+    echo "Core selected"
+    selected=1
+    ;;
+  #@ Server ----------------------------------
+  *"server"* )
+    echo "General server selected"
+    instlist="$instlist cockpit cockpit-pcp ca-certificates curl gnupg" #zfsutils-linux
+    optlist="$optlist atop"
+    
+    #@ Server FULL
+    case $@ in
+      *"full"* )
+        optlist="$optlist docker nfs-kernel-server samba "
+        ;;
+    esac
+    selected=1
+    touch $installpath/server.lock
+    ;;
+esac
+
+case $@ in
+  #@ LAMP
+  *"lamp"* )
+    echo "LAMP server selected"
+    instlist="$instlist cockpit cockpit-pcp apache2 php libapache2-mod-php sqlite"
+    optlist="$optlist atop python-certbot-apache"
+    
+    # MariaDB
+    optlist="$optlist mariadb-server php-mysql"
+    
+    #@ LAMP FULL
+    case $@ in
+      *"full"* )
+        instlist="$instlist memcached libmemcached-tools"
+        optlist="$optlist redis"
+        # PHP
+        instlist="$instlist php-apcu php-gd php-imagick php-memcached"
+        optlist="$optlist php-redis"
+        ;;
+    esac
+    selected=1
+    ;;
+  #@ PVE
+  *"pve"* )
+    # https://pve.proxmox.com/wiki/Install_Proxmox_VE_on_Debian_12_Bookworm
+    echo "Proxmox Virtual Environment selected"
+    echo "deb [arch=amd64] http://download.proxmox.com/debian/pve bookworm pve-no-subscription" > /etc/apt/sources.list.d/pve-install-repo.list
+    #wget https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg -O /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
+    instlist="$instlist proxmox-default-kernel proxmox-ve postfix open-iscsi chrony"
+    selected=1
+    ;;
+    
+# Menu setup --------------------------------------------
+  *"status"*)
+    echo "Installed roles"
+    cd $installpath/
+    ls *.lock
+    cd
+    echo ""
+    echo "Remove $installpath/*.lock files to be able to reinstall"
+    
+    exit 0
+    ;;
+  *"help"*)
+    echo "Version: $version"
+    echo ""
+    echo ""
+    echo " [full]    switches the installation frome lite to a"
+    echo "           more complete solution for daily usage in"
+    echo "           creative and professional environments."
+    #echo ""
+    #echo " [details] Shows all details for all options"
+    echo ""
+    echo "Some possible installations:"
+    echo " [lamp full]            +php-modules,redis,..."
+    echo " [cinnamon full office] +gimp,vlc,clementine,steam,libreoffice..."
+    echo " [server gnome full]    Docker, SMB ,WebUI, +GUI, +sqlitebrowser..."
+    echo ""
+    echo ""
+    echo " [any] -n  Use this to simulate the installation without changes and get"
+    echo "           detailed informations about every step and package selection"
+    echo ""
+    echo "For consulting or any kind of support visit www.kaai24.eu"
+    
+    exit 0
+    ;;
+  *"details"*)
+    echo "All packages"
+    echo ""
+    grep "#@\|instl" ilux-install | grep -v "grep" | sed s/instlist=//g | sed s/docker=//g | sed s/\$instlist//g | sed s/apt\ install\ -y//g | sed s/\ \ //g | sed s/\"//g
+    
+    exit 0
+    ;;
+#  * )
+#    #currently empty
+#    ;;
+esac
+
+if [ $selected = 0 ]; then
+  
+	echo "Please add (multiple choice possible)"
+	echo ""
+	echo " [core]     Minimal setup                                  CLI"
+	echo " [server]   Server                                         Web"
+	echo " [lamp]     Webserver                                      Web"
+	echo " [pve]      Proxmox Virtualisation Environment             Web"
+	echo " [cinnamon] Cinnamon desktop                               GUI"
+	echo " [gnome]    Gnome 3 desktop                                GUI"
+	echo ""
+	echo " [clamav]   +Clam Antivirus"
+	echo " [full]     +all recommended packages"
+	echo " [office]   +Libre Office"
+	echo ""
+	echo " [status]   Show installed roles"
+	echo " [help]     Show help"
+	
+	if [ ! -s "$conf_file" ]; then
+	  echo ""
+	  echo " You will get an option to modify the package selection"
+	fi
+	
+	exit 0
+fi
+
+#@ Desktop setup --------------------------------------------
+if [ $desktop = 1 ]; then
+
+  #@ Common desktop apps ---------------------------
+  instlist="$instlist gedit gnome-calculator gnome-screenshot nautilus terminator"
+  instlist="$instlist brave-browser default-jre baobab gparted gpart ffmpeg gnome-software-plugin-flatpak"
+  optlist="$optlist eog filezilla gnome-disk-utility gsmartcontrol psensor synaptic"
+  #gnome-disks -> gnome-disk-utility
+  
+  #@ Nvidia driver (if detected)
+  if grep -i "nvidia" <(lspci); then
+    echo "Found Nvidia device"
+    optlist="$optlist nvidia-driver nvtop"
+  fi
+  if grep -i "radeon" <(lspci); then
+    echo "Found Radeon device"
+    optlist="$optlist radeontop"
+  fi
+  
+  case $@ in
+  *"clamav"* )
+    #@ ClamAV desktop tools
+    instlist="$instlist clamtk clamtk-gnome"
+    ;;
+  esac
+  
+  case $@ in
+  *"full"* )
+    #@ Common desktop FULL
+    instlist="$instlist dconf-editor vlc"
+    optlist="$optlist gimp hardinfo grsync strawberry" #clementine replaced by strawberry
+    optlist="$optlist gnome-mines gnome-chess" #redshift
+    
+    # Productive
+    instlist="$instlist webp fonts-croscore"
+    optlist="$optlist geany imagemagick putty sqlite sqlitebrowser"
+    optlist="$optlist inkscape obs-studio wireshark" #To consider: gpaste
+    ;;
+  esac
+  
+  case $@ in
+  *"office"* )
+    #@ Office
+    instlist="$instlist libreoffice-writer libreoffice-calc"
+    ;;
+  esac
+fi
+
+#@ Start the doing and logging ###########################################################################
+
+exec > >(tee -a "$logfile") 2>&1
+
+owd=$(pwd)
+echo ""
+echo "Ilux $ILUXVERSION installation started at $(date) from $owd"
+echo ""
+
+if [ "$drymode" == "true" ]; then
+  echo "Simulation mode, no changes to the system will be made"
+  echo ""
+fi
+
+# Optlist --------------------------------------------
+
+if [ ! -s "$conf_file" ]; then
+
+  echo "No preconfigured $conf_file found. Creating one"
+  echo "# Please review the selection of additional recommended packages (ctrl+x to close)" > "$conf_file"
+  echo "$optlist" >> "$conf_file"
+
+  # Open the file in nano for user editing and pause output redirection
+  exec > /dev/tty 2>&1
+  nano "$conf_file"
+  exec > >(tee -a "$logfile") 2>&1
+else
+  echo "Using preconfigured $conf_file"
+fi
+
+optlist=$(sed '1d' "$conf_file")
+
+instlist="$instlist $optlist"
+
+#@ pkg2var
+# Reading some packages as options
+# These will be removed from the instlist and handled seperatly further down
+
+pkg2var() {
+  if [[ "$optlist" == *"$1"* ]]; then
+    optlist=$(echo "$optlist" | sed 's/$1//')
+    pkg=$(echo "$1" | sed 's/-/_/')
+    eval "pkg=true"
+   
+  fi
+}
+
+pkg2var brave-browser
+pkg2var docker
+pkg2var steam
+pkg2var strawberry
+
+# Verify permissions in drymode --------------------------
+if [ "$drymode" == "true" ]; then
+  echo "Full list of selected packages:"
+  echo "$instlist"
+  
+  echo ""
+  echo "Verifing permissions"
+  checkperm() {
+		if [ -w "$1" ]; then
+      echo "$1 OK"
+    else
+      if [ -d "$1" ]; then
+        echo "$1 No permission. You need to be root!"
+      else
+        echo "$1 Directory not yet created"
+      fi
+    fi
+	}
+	
+	checkparentperm() {
+		path="$1"
+
+		# Loop through each parent directory
+		while [ "$path" != "/" ]; do
+			checkperm "$path"
+			path=$(dirname "$path")
+		done
+	}
+	
+	checkperm "./"
+	checkparentperm "$installpath"
+	checkperm "/etc"
+	
+  # exit 0
+
+else
+#@ APT ------------------------------------------------------
+	# Nice switches for apt: --download-only, --no-download
+	
+	apt-add-repository contrib
+	apt-add-repository non-free
+
+	apt update
+	apt dist-upgrade -y
+	DEBIAN_FRONTEND=noninteractive apt install -y $instlist
+  
+  echo "Creating files and directories for the installation"
+  
+  mkdir -p "$installpath"
+  cp -a "$(readlink -f "$0")" "$installpath/"
+  cp -a "$conf_file" "$installpath/$conf_file"
+  
+  mkdir -p "$downloadpath"
+  cd "$downloadpath"
+  
+  echo "Will write downloaded elements to $(realpath $downloadpath)"
+  
+fi
+
+#@ Core config --------------------------------------------
+if [ "$drymode" != "true" ]; then
+	if [ ! -r $installpath/core.lock ]; then
+
+		echo -e "\nCore setup"
+		
+		# Privacy for home folders
+		sed -i 's/UMASK		022/UMASK		027/' /etc/login.defs
+		chmod 750 /home/*
+		
+		# swapping
+		echo 'vm.swappiness=10' >> /etc/sysctl.conf
+		sysctl -p
+		
+		# read current network settings
+		net_interface=$(ip route | grep default | awk '{print $5}')
+		net_ip_with_subnet=$(ip -o -4 addr show dev "$interface" | awk '{print $4}')
+		# If needed extract just the IP address (without the subnet)
+		# net_ip_address=$(echo "$ip_with_subnet" | cut -d/ -f1)
+		net_gateway=$(ip route | grep default | awk '{print $3}')
+		net_nameserver=$(grep "^nameserver" /etc/resolv.conf | awk '{print $2}')
+
+		# Output the results
+		echo -e "\nWriting current network config (commented out) to /etc/network/interfaces"
+		echo "Interface: $net_interface"
+		echo "IP Address: $net_ip_address"
+		echo "Gateway: $net_gateway"
+		echo "Nameserver: $net_nameserver"
+		
+		echo "" >> /etc/network/interfaces
+		echo "# These settings have been prepared during the installation:" >> /etc/network/interfaces
+		echo "" >> /etc/network/interfaces
+		echo "#auto $net_interface" >> /etc/network/interfaces
+		echo "#iface $net_interface inet dhcp" >> /etc/network/interfaces
+		echo "" >> /etc/network/interfaces
+		echo "#iface $net_interface inet static" >> /etc/network/interfaces
+		echo "#    address $net_ip_with_subnet" >> /etc/network/interfaces
+		echo "#    gateway $net_gateway" >> /etc/network/interfaces
+		echo "#    dns-nameserver $net_nameserver" >> /etc/network/interfaces.
+		
+		# IPv6
+		echo "" >> /etc/sysctl.conf
+		echo "#Disabe IPv6 (usually unwanted on local networks)" >> /etc/sysctl.conf
+		echo "#net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.conf
+		echo "#net.ipv6.conf.default.disable_ipv6 = 1" >> /etc/sysctl.conf
+		echo "#net.ipv6.conf.lo.disable_ipv6 = 1" >> /etc/sysctl.conf
+		#sysctl -p
+		
+		# rsyslog
+		if dpkg -l | grep -q rsyslog; then
+			echo "" >> /etc/rsyslog.conf
+			echo "#Uncommend the following blocks for logging to a server" >> /etc/rsyslog.conf
+			
+			echo "#Enable sending system logs over UDP to rsyslog server" >> /etc/rsyslog.conf
+			echo "#*.* @rsyslog-server-ip:514" >> /etc/rsyslog.conf
+			echo "" >> /etc/rsyslog.conf
+			echo "#Enable sending system logs over TCP to rsyslog server" >> /etc/rsyslog.conf
+			echo "#*.* @@rsyslog-server-ip:514" >> /etc/rsyslog.conf
+			
+			echo "" >> /etc/rsyslog.conf
+			echo "$ActionQueueFileName queue" >> /etc/rsyslog.conf
+			echo "$ActionQueueMaxDiskSpace 1g" >> /etc/rsyslog.conf
+			echo "$ActionQueueSaveOnShutdown on" >> /etc/rsyslog.conf
+			echo "$ActionQueueType LinkedList" >> /etc/rsyslog.conf
+			echo "$ActionResumeRetryCount -1" >> /etc/rsyslog.conf
+	  else
+	    echo "rsyslog not detected. Not preparing any rules"
+	  fi
+
+		mkdir -p /var/log/journal
+		echo "Storage=persistend" >> /etc/systemd/journald.conf
+		echo "SystemMaxUse=500M" >> /etc/systemd/journald.conf
+		
+		flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+		
+		echo "Reinstalling rc.local because it was removed from Debian"
+		wget $server/files/ilux/rc-local.service -O /etc/systemd/system/rc-local.service
+		wget $server/files/ilux/rc.local -O /etc/rc.local
+		chmod +x /etc/rc.local
+		systemctl enable rc-local
+		
+		if dpkg -l | grep fail2ban; then
+			echo "Hardening fail2ban"
+			wget $server/files/ilux/jail.local -O /etc/fail2ban/jail.local
+			systemctl restart fail2ban
+		fi
+		
+		echo "Adding tmpfs for /tmp to /etc/fstab for better performance"
+		echo "" >> /etc/fstab
+		echo "# Move /tmp to memory:" >> /etc/fstab
+		echo "tmpfs                         /tmp            tmpfs   noatime,nomand,nosuid  0  0" >> /etc/fstab
+		#nano /etc/fstab
+		
+		touch $installpath/core.lock
+		
+	else
+		echo -e "\nCore already installed"
+	fi
+
+else
+	echo -e "\nSkipping core installation"
+fi
+
+#@ Desktop config --------------------------------------------
+if [ $desktop = 1 ]; then
+  if [ "$drymode" != "true" ]; then
+		
+		echo -e "\nDesktop installation"
+		
+		# Brave Browser
+		if ! dpkg -l | grep -q brave-browser && [ "$brave_browser" == "true" ]; then
+			
+			echo "Brave browser installation from brave.com"
+			apt install -y apt-transport-https curl gnupg
+			curl -s https://brave-browser-apt-release.s3.brave.com/brave-core.asc | apt-key --keyring /etc/apt/trusted.gpg.d/brave-browser-release.gpg add -
+			echo "deb [arch=amd64] https://brave-browser-apt-release.s3.brave.com/ stable main" | tee /etc/apt/sources.list.d/brave-browser-release.list
+			
+			apt update && apt install -y brave-browser
+		#	touch $installpath/brave.lock
+		
+		else
+			echo "Skipping Brave installation"
+		fi
+		
+		case $@ in
+		*"full"* )
+				
+			if [ ! -r $installpath/steam.lock ] && [ "$steam" == "true" ]; then
+				
+				echo "Valve Steam installation from flathub.com"
+				flatpak install flathub com.valvesoftware.Steam
+				echo "#!/bin/bash" > "/usr/bin/local/steam"
+				echo "" >> "/usr/bin/local/steam"
+				echo "flatpak run com.valvesoftware.Steam" >> "/usr/bin/local/steam"
+				
+				#  Classic install:
+				#  wget https://cdn.akamai.steamstatic.com/client/installer/steam.deb && dpkg -i steam.deb
+			  
+			  # Based on: https://archlinux.org/news/increasing-the-default-vmmax_map_count-value/
+			  echo "vm.max_map_count=1048576" >> /etc/sysctl.conf
+		    sysctl -p
+			  
+				touch $installpath/steam.lock
+				
+			else
+				echo "Skipping Valve Steam installation"
+			fi
+			
+			# To-do: strawberry
+			
+			;;
+		esac
+		
+		# Theme
+		if [ ! -r $installpath/theme.lock ]; then
+			
+			echo "Preparing Ilux theme"
+			wget $server/files/ilux/mcata-dark.tar.xz
+			tar --keep-newer-files --xz -xf mcata-dark.tar.xz --directory /usr/share/themes/
+			wget $server/files/ilux/mcata-light.tar.xz
+			tar --keep-newer-files --xz -xf mcata-light.tar.xz --directory /usr/share/themes/
+			wget $server/files/ilux/papirus.tar.xz
+			tar --keep-newer-files --xz -xf papirus.tar.xz --directory /usr/share/icons/
+			wget $server/files/ilux/papirus-dark.tar.xz
+			tar --keep-newer-files --xz -xf papirus-dark.tar.xz --directory /usr/share/icons/
+			apt install -y  breeze
+			touch $installpath/theme.lock
+			
+		else
+			echo "Theme is already installed"
+		fi
+		
+		if [ ! -r $installpath/desktop.lock ]; then
+			# Settings
+			#wget $server/buster/skel.tar.xz
+			#tar --keep-newer-files --xz -xf skel.tar.xz --directory /etc/skel/
+			
+			echo -e "\nUpdating user home directories"
+			cd /home/
+			for dest in $(ls -d *); do
+				echo $dest "..."
+				if [ -f "$dest/.bash_aliases" ]
+				  cat "/etc/skel/.bash_aliases" >> "$dest/.bash_aliases"
+				fi
+				rsync -rlptDXu --chown=$dest:$dest  /etc/skel/ $dest/
+			done
+			
+			# Add bash_aliases to root
+			if [ ! -f "/root/.bash_aliases" ]
+				cat "/etc/skel/.bash_aliases" >> "/root/.bash_aliases"
+				
+				echo "if [ -f ~/.bash_aliases ]; then" >> "/root/.bashrc"
+				echo "    . ~/.bash_aliases" >> "/root/.bashrc"
+				echo "fi" >> "/root/.bashrc"
+		  fi
+			
+			cd "$downloadpath"
+			
+			# Cleanup
+			apt remove -y mlterm mlterm-tiny mlterm-common termit khmerconverter libreoffice-math gnome-sushi 2>/dev/null
+			apt autoremove -y
+			
+			# Specific modifications and fixes
+			case $@ in
+        *"cinnamon"* )
+          # We really don't like nemo!
+          ln -s /usr/bin/nautilus /usr/local/bin/nemo
+          ;;
+#        *"gnome"* )
+#          
+#          ;;
+      esac
+			
+			
+			touch $installpath/desktop.lock
+		fi
+	else
+		echo -e "\nSkipping desktop installation"
+	fi
+	
+else
+  echo -e "\nNo desktop installation"
+fi
+
+if [ "$drymode" != "true" ]; then
+
+#@ LAMP setup --------------------------------------------
+	case $@ in
+    *"lamp"* )
+			echo -e "\nLAMP setup"
+			if [ ! -r $installpath/lamp.lock ]; then
+				
+				echo "Linking /var/www/html to /srv/www"
+				ln -s /var/www/html /srv/www
+				
+				echo "Setting up apache"
+				# Proxy
+				a2enmod rewrite
+				a2enmod deflate
+				a2enmod headers
+				a2enmod proxy
+				a2enmod proxy_http
+				a2enmod proxy_ajp
+				a2enmod proxy_balancer
+				a2enmod proxy_connect
+				a2enmod proxy_html
+				
+				echo "<VirtualHost *:80>" >> /etc/apache2/sites-enabled/rproxy1.conf
+				echo " ServerName $(hostname -f)" >> /etc/apache2/sites-enabled/rproxy1.conf
+				echo " ProxyPreserveHost On " >> /etc/apache2/sites-enabled/rproxy1.conf
+				echo " DocumentRoot /var/www/html" >> /etc/apache2/sites-enabled/rproxy1.conf
+				echo " ProxyPass /.well-known !" >> /etc/apache2/sites-enabled/rproxy1.conf
+				echo " ProxyPass / http://$(hostname -I)/" >> /etc/apache2/sites-enabled/rproxy1.conf
+				echo " ProxyPassReverse / http://$(hostname -I):80/" >> /etc/apache2/sites-enabled/rproxy1.conf
+				echo "</VirtualHost>" >> /etc/apache2/sites-enabled/rproxy1.conf
+				
+				#SSL
+				#openssl genrsa -out /etc/ssl/private/apache.key 2048
+				#openssl req -new -x509 -key /etc/ssl/private/apache.key -days 365 -sha256 -out /etc/ssl/certs/apache.crt
+				
+				#echo "<IfModule mod_ssl.c>" >> /etc/apache2/ports.conf
+				#echo "   Listen 443" >> /etc/apache2/ports.conf
+				#echo "</IfModule>" >> /etc/apache2/ports.conf
+				
+				#a2enmod ssl
+				#a2ensite ssl.conf
+				
+				#openssl req -new -key /etc/ssl/private/apache.key -out ./apache.csr
+				
+				if dpkg -l | grep certbot; then
+				  certbot --apache
+				  (crontab -l; echo "0 1 * * * /usr/bin/certbot renew & > /dev/null") | crontab -
+				fi
+				
+				case $@ in
+					*"full"* )
+						echo "Additional LAMP features"
+						
+						if dpkg -l | grep redis; then
+						  echo "Setting up redis"
+							echo "" >> /etc/redis/redis.conf
+							#echo "maxmemory 512mb" >> /etc/redis/redis.conf
+							#echo "maxmemory-policy allkeys-lru" >> /etc/redis/redis.conf
+							echo "bind $(hostname -I)" >> /etc/redis/redis.conf
+							usermod -aG redis www-data
+							systemctl restart redis
+						fi
+						;;
+				esac
+				systemctl restart apache2
+				touch $installpath/lamp.lock
+				
+			else
+				echo -e "\nLAMP already installed"
+			fi
+			;;
+#@ Proxmox config --------------------------------------------
+		*"pve"* )
+			echo -e "\nInstalling Proxmox VE"
+			if [ ! -r $installpath/pve.lock ]; then
+			
+				echo "$(hostname -I)    $(hostname)" >> /etc/hosts
+				
+				systemctl stop postfix
+				systemctl disable postfix && echo "Disabled postfix for lab environments"
+
+				apt remove linux-image-amd64 'linux-image-6.1*'
+				update-grub
+				
+				support="$support or https://proxmox.com/en/services/support"
+				touch $installpath/pve.lock
+				
+			else
+				echo -e "\nProxmox VE already installed"
+			fi
+			;;
+#@ Server config --------------------------------------------
+		*"server"* )
+			echo -e "\nGeneral server setup"
+			
+			echo "Creating /srv/share"
+			mkdir -p /srv/share
+			chmod 777 /srv/share
+			
+			if [ "$docker" == "true" ]; then
+				echo "Installing docker from docker.com"
+				
+				install -m 0755 -d /etc/apt/keyrings
+				curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+				chmod a+r /etc/apt/keyrings/docker.gpg
+				
+				echo \
+				"deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+				"$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+				tee /etc/apt/sources.list.d/docker.list > /dev/null
+				
+				apt update && apt install -y "docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin"
+			fi
+			
+			if dpkg -l | grep aspell; then
+				apt remove aspell
+			fi
+			
+			case $@ in
+				*"full"* )
+					
+					echo "Writing samba example config"
+					echo "" >> /etc/samba/smb.conf
+					echo "# [public]" >> /etc/samba/smb.conf
+					echo "# comment = smb share" >> /etc/samba/smb.conf
+					echo "# path = /srv/share/" >> /etc/samba/smb.conf
+					echo "# guest ok = yes" >> /etc/samba/smb.conf
+					echo "# read only = no" >> /etc/samba/smb.conf
+					echo "# create mode = 0644" >> /etc/samba/smb.conf
+					echo "# directory mode = 0755" >> /etc/samba/smb.conf
+					echo "# browseable = yes" >> /etc/samba/smb.conf
+					echo "" >> /etc/samba/smb.conf
+					echo "# Additional options:" >> /etc/samba/smb.conf
+					echo "# public = yes" >> /etc/samba/smb.conf
+					echo "# valid users = username" >> /etc/samba/smb.conf
+					echo "# writable = yes" >> /etc/samba/smb.conf
+					echo "# printable = no" >> /etc/samba/smb.conf
+					
+					#systemctl restart smbd.service
+					;;
+			esac        
+			
+			if dpkg -l | grep rsyslog; then
+				echo "Adding config to /etc/rsyslog.conf if this should be a log server"
+				mkdir /var/log/clients
+				echo "" >> /etc/rsyslog.conf
+				echo "#Uncommend if this is the log-server" >> /etc/rsyslog.conf
+				echo '#$template remote-incoming-logs,"/var/log/clients/%HOSTNAME%/%PROGRAMNAME%.log"' >> /etc/rsyslog.conf
+				echo "#*.* ?remote-incoming-logs" >> /etc/rsyslog.conf
+			fi
+			;;
+	esac
+else
+  echo -e "\nSkipping server roles"
+fi
+
+#if [ -r $installpath/fs.lock ]
+#then
+#  echo "Filesystem already configured"
+#else
+#  case $@ in
+#  *"fs"* )
+#    echo "#!/bin/sh" >> /root/bin/snap
+#    echo "" >> /root/bin/snap
+#    echo "stamp=$(date +%H%M)" >> /root/bin/snap
+#    echo "dir=var" >> /root/bin/snap # folder 
+#    echo "subv=/$dir" >> /root/bin/snap
+#    echo "snap=/.$dir-$stamp" >> /root/bin/snap
+#    echo "" >> /root/bin/snap
+#    echo "btrsnap() {" >> /root/bin/snap
+#    echo "" >> /root/bin/snap
+#    echo "btrfs sub del $snap" >> /root/bin/snap
+#    echo "btrfs sub snap $subv $snap" >> /root/bin/snap
+#    echo "}" >> /root/bin/snap
+#    echo "btrsnap" >> /root/bin/snap
+#    
+#    echo "(crontab -l; echo "# 0 3,15 * * * /root/bin/snap") | crontab -
+#    ;;
+#  esac
+#fi
+
+if [ "$drymode" != "true" ]; then
+  apt clean
+fi
+
+#@ Branding ----------------------------------------
+if [ ! -v indev ]; then
+
+ORGVERSION=$(grep "^VERSION=" /etc/os-release | cut -d'=' -f2)
+ORGVERSION_CODENAME=$(grep "^VERSION_CODENAME=" /etc/os-release | cut -d'=' -f2)
+
+if [ "$drymode" == "true" ]; then
+
+  echo ""
+  echo "This would install Ilux $ILUXVERSION/$ORGVERSION"  
+
+else
+	sed -i.bak '/^PRETTY_NAME=/c\\PRETTY_NAME="Ilux $ILUXVERSION\/$ORGVERSION"' /etc/os-release
+	sed -i '/^NAME=/c\\NAME="Ilux"' /etc/os-release
+	sed -i '/^VERSION=/c\\VERSION="$ILUXVERSION\/$ORGVERSION"' /etc/os-release
+	sed -i '/^HOME_URL=/c\\HOME_URL="https:\/\/www.kaai24.eu\/"' /etc/os-release
+	sed -i '/^SUPPORT_URL=/c\\SUPPORT_URL="https:\/\/www.kaai24.eu\/"' /etc/os-release
+
+	echo "Ilux on " $(cat /etc/issue.net) > /etc/issue
+	echo $support >> /etc/issue
+	echo "" >> /etc/issue
+
+	echo $support > /etc/motd
+fi
+
+fi #indev
+
+#@ Done --------------------------------------------
+
+echo ""
+echo "--------------------------------------------------------------"
+echo $support
+echo ""
+echo "Done. Thank you for installing Ilux"
+echo ""
+echo "If you want to disable IPv6 edit these files"
+echo "  /etc/sysctl.conf"
+echo "  /etc/hosts"
+echo ""
+case $@ in
+  *"lamp"* )
+    echo "Please verify"
+    echo "  /etc/apache2/sites-enabled/rproxy1.conf"
+    ;;
+  *"server"* )
+    echo "Please check these configs"
+    echo "  /etc/samba/smb.conf"
+    echo "  /etc/rsyslog.conf"
+    ;;
+  *"pve"* )
+    echo "Please reboot to apply all changes"
+    ;;
+esac
+
+if [ "$drymode" != "true" ]; then
+	case $@ in
+		*"cinnamon"* )
+			echo "Please reboot to apply all changes"
+			;;
+		*"gnome"* )
+			echo "Please reboot to apply all changes"
+			;;
+	esac
+	echo ""
+fi
+
+if [ "$drymode" == "true" ]; then
+  echo "This was a simulation. No changes to the systen where made"
+  echo "You have a logfile at $owd/$logfile"
+  
+else
+  echo "Saving logfile to $installpath/$logfile"
+  cp -a $owd/$logfile $installpath/$logfile
+fi
