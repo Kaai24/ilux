@@ -232,7 +232,7 @@ fi
 if [ $desktop = 1 ]; then
 
   #@ Common desktop apps ---------------------------
-  instlist="$instlist gedit gnome-calculator gnome-screenshot nautilus terminator"
+  instlist="$instlist gedit gnome-calculator gnome-screenshot nautilus ruby-notify terminator"
   instlist="$instlist brave-browser default-jre baobab gparted gpart ffmpeg gnome-software-plugin-flatpak"
   optlist="$optlist eog filezilla gnome-disk-utility gsmartcontrol psensor synaptic"
   #gnome-disks -> gnome-disk-utility
@@ -314,10 +314,16 @@ instlist="$instlist $optlist"
 # Reading some packages as options
 # These will be removed from the instlist and handled seperatly further down
 
+# Secure eval with a prefix
+
 pkg2var() {
   if [[ "$optlist" == *"$1"* ]]; then
+  
+    # remove $1 from $optlist and store $1 as $pkg with _ not -
     optlist=$(echo "$optlist" | sed 's/$1//')
     pkg=$(echo "$1" | sed 's/-/_/')
+    
+    # create variables from $pkg and set them to true
     eval "pkg=true"
    
   fi
