@@ -6,7 +6,9 @@
 
 # Made by kaai24.eu for the Ilux distribution.
 
-version=2.241031
+version=2.241120
+
+# Config:
 
 #Limit for yellow greater than use%
 warn1=79
@@ -23,7 +25,9 @@ warn3=97
 #Default options
 arguments="--total"
 
-source ~/.config/ilux/df.conf 2>/dev/null || source /opt/ilux/conf/df.conf 2>/dev/null
+# ---
+
+source $HOME/.config/ilux/df.conf 2>/dev/null || source /opt/ilux/conf/df.conf 2>/dev/null
 
 help() {
   help="$(/bin/df --help)"
@@ -38,7 +42,8 @@ help() {
   echo -e "Ilux additions:"
   echo -e "      --file FILE       Read a df output from a file"
   echo -e "      --filter TERM     limit listing to matches (uses egrep)"
-  echo -e "                        use \"TERM|TERM\" for multiple filters"      
+  echo -e "                        use \"TERM|TERM\" for multiple filters"
+  echo -e "      --config          show configuration details about the wrapper"
   
   echo -e "$help"
   
@@ -48,10 +53,18 @@ help() {
   
   echo -e "$copyright"
   echo -e "\nOutput has been modified by the wrapper for Ilux\nSee --version for details"
+  
+  exit
+}
+
+config() {
+  echo -e "The config for the wrapper is expected at $HOME/.config/ilux/df.conf with:"
+  awk '/^# Config:/ {flag=1; next} /^# ---/ {flag=0} flag' $0
+  
+  exit
 }
 
 bugfixes() {
-  if [ -v debug ]; then echo -e "  function: Bug fixing"; fi
   
   # Bug workaround for gnulib like in df Version 8.32 in Debian 11, Ubuntu 20.04 and flatpak
   # Bug in GNU: https://lists.gnu.org/archive/html/bug-gnulib/2021-02/msg00053.html
@@ -63,37 +76,30 @@ bugfixes() {
 
 fileInput() {
   if [ -z "$input" ] || [[ "$input" == "--file" ]]; then
-    if [ -v debug ]; then echo -e "    input: MISSING additional ARG for --file $input" && exit 1 ; fi
     echo "Missing argument for df --file FILENAME"
     exit 1
   fi
   
   if [ -f "$input" ]; then
     # input is a file
-    if [ -v debug ]; then echo -e "    file:" ; fi
     input=$(cat "$input")
   
   else
     # input is multiline text
-    if [ -v debug ]; then echo -e "    string:" ; fi
+    true
   fi
-  
-  if [ -v debug ]; then echo -e "      input: |\n$input" ; fi
 }
 
 filter() {
   
   if [ -z "$filter" ] || [[ "$filter" == "--filter" ]]; then
-    if [ -v debug ]; then echo -e "    input: MISSING additional arg for --filter: $filter" && exit 1 ; fi
     echo "Missing argument for df --file FILENAME"
     exit 1
   fi
   
-  if [ -v debug ]; then echo -e "  filter: $filter"; fi
-  
   if echo -e "$input" | grep -q /dev/; then
     header="$(echo "$input" | grep Mounted)"
-    input="$(echo "$input" | grep -v Mounted | egrep "$filter")"
+    input="$(echo "$input" | grep -v Mounted | grep -Ei "$filter")"
     
     if [[ -z $input ]]; then
       echo "No mounts with $filter"
@@ -105,14 +111,12 @@ filter() {
 }
 
 processDf() {
-  if [ -v debug ]; then echo -e "  function: Processing"; fi
   
   # Define color codes
   YELLOW='\033[1;33m'
   RED='\033[1;31m'
   RESET='\033[0m'
 
-  if [ -v debug ]; then echo -e "--- # Output" ; fi
   # Run df command, processing each line
   echo -e "$input" | while read -r line; do
       # Extract the "Use%" and "Avail" columns (5th and 4th columns)
@@ -158,18 +162,10 @@ processDf() {
   done
 }
 
-if [[ " $@ " == *" --debug "* ]]; then
-  debug=true
-  echo -e "---\nDEBUG:"
-fi
-
 #@ Parse options
 args=("$@")
 i=0
 while [ $i -lt ${#args[@]} ]; do
-  if [ -v debug ]; then
-    echo -e "  case: args[$i]=${args[$i]}"
-  fi
   case "${args[$i]}" in
     --file)
       inputfile=true
@@ -187,18 +183,17 @@ while [ $i -lt ${#args[@]} ]; do
       ((i+=2))
       continue
       ;;
-    --debug)
-      true #do nothing further in this case
-      ;;
     --help)
       help
-      exit 0
+      ;;
+    --config)
+      config
       ;;
     --version)
       /bin/df --version
       echo -e "\nWrapper v$version for Ilux, written by kaai24.eu"
       echo -e "Details at kaai24.eu/Ilux-commands"
-      exit 0
+      exit
       ;;
     *)
       # filter non matching options
@@ -210,11 +205,8 @@ done
 
 if [ -v inputfile ]; then
   fileInput
-else
-  if [ -v debug ]; then
-    echo -e "    defaults_parsed: $dfargs\n    input: /bin/df "
-  fi
   
+else
   input="$(/bin/df $dfargs $arguments 2>&1)"
 fi
 

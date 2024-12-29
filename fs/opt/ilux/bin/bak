@@ -1,8 +1,10 @@
-#!/bin/bash -e
+#!/bin/bash
 
 # Easy creation and restoration of local backups
 
-version=1.241024
+version=1.241120
+
+# Config:
 
 # Timestamp to append to filenames
 # %year%month%day-%Hour%Minute in two digits, %S for %Second, %V for ISO-8601 weeknr, %b month like "Oct", %a day like "Thu" if needed.
@@ -11,23 +13,28 @@ tstamp=$(date +"%y%m%d-%H%M")
 
 # Compression options (extract uses archive suffix)
 # --bzip2, --xz, --lzip, --lzma, --lzop, --gzip, --zstd
-compressmode="--gzip"
+compressmode="--xz"
 
-# Default options (no spaces or -)
+# Default options like "v" (no spaces or -)
 arguments=""
 
-source ~/.config/ilux/bak.conf 2>/dev/null || source /opt/ilux/conf/bak.conf 2>/dev/null
+# ---
+
+source $HOME/.config/ilux/bak.conf 2>/dev/null || source /opt/ilux/conf/bak.conf 2>/dev/null
+if [ $? -eq 1 ]; then inline=1
+fi
 
 help() {
-  echo "Usage: $0 [e|c|d|q|r|s|v|x|z] TARGET"
+  echo "Usage: $0 [OPTIONS] TARGET"
   echo ""
-  echo "Creates a backup of a file or directory with the current time in the name"
+  echo "Creates a backup of a file or directory with the current time in the name with support for compression and encryption"
   echo ""
-  echo "-c Creates a copy, not a compressed file (default for files)"
-  echo "-r Restores (extracts) the content of a tar backup (not overwriting)"
+  echo "-c Creates a copy, not a compressed archive (default for files)"
+  echo "-l List the content of an archive. Can be used with -d"
+  echo "-r Restores (extracts) the content of an archive (not overwriting)"
   echo "-s Create backups in a bak/ subfolder"
   echo "-x Same as -r"
-  echo "-z Creates a compressed tar file (default for directories)"
+  echo "-z Creates a compressed tar archive (default for directories)"
   echo ""
   echo "-e Encrypts a file using openssl AES-256-CBC with salt, asks for a password"
   echo "-d Decrypts a file"
@@ -35,23 +42,41 @@ help() {
   echo "-q Less output but not quiet. Can be used together with -v"
   echo "-v Verbose mode for more details from cp and tar"
   echo ""
-  echo "--help    Displays this help"
-  echo "--version Output information about this"
+  echo "--help or -h Displays this help"
+  echo "--config     Show configuration details"
+  echo "--version    Output information about this"
   echo ""
-  echo "Settings for timestamp and compression in /opt/ilux/conf/bak.conf"
-  echo "Compression is set to $(echo "$compressmode" | cut -c 3-)"
+  echo "To extract a single file from an archive use"
+  echo "  bak -x TARGET FILE"
+  
+  exit
 }
 
-if [ -z "$1" ]; then
+config() {
+  echo "Compression is set to $(echo "$compressmode" | cut -c 3-)"
+  
+  if [ -v inline ]; then
+    echo "Settings for timestamp and compression are default from inline config, because no config file is present."
+  fi
+  
+  echo -e "\nThe config is expected at $HOME/.config/ilux/bak.conf with:"
+  awk '/^# Config:/ {flag=1; next} /^# ---/ {flag=0} flag' $0
+  
+  exit
+}
+
+if [ $# -lt 1 ]; then
   echo "Missing input"
   echo "Use --help for usage details"
   exit 1
 fi
 
 case "$1" in
-  --help)
+  --help | -h)
     help
-    exit 0
+    ;;
+  --config)
+    config
     ;;
   --version)
     echo -e "bak v$version\n"
@@ -62,9 +87,10 @@ case "$1" in
 esac
 
 # Evaluate inputs
-if [[ -n "$3" ]]; then
+if [[ -n "$3" ]] && [[ ! -r "$2" ]]; then
   echo "Too many arguments!"
   echo "For multiple options use the merged format like -ze or -xdv"
+  echo "Use --help for usage details"
   exit 1
 fi
 
@@ -84,7 +110,9 @@ if [[ "$options" == -* ]]; then
 
   # Options
   if [[ "$options" == *"c"* ]]; then copy=1; fi
+  if [[ "$options" == *"d"* ]]; then decrypt=1; fi
   if [[ "$options" == *"e"* ]]; then encrypt=1; fi
+  if [[ "$options" == *"l"* ]]; then list=1; fi
   if [[ "$options" == *"q"* ]]; then quiet=1; fi
   if [[ "$options" == *"r"* ]]; then extract=1; fi
   if [[ "$options" == *"s"* ]]; then subdir=1; fi
@@ -99,7 +127,7 @@ if [[ "$options" == -* ]]; then
   fi
   
   # Decrypt
-  if [[ "$options" == *"d"* ]]; then
+  if [ -v decrypt ]; then
     echo "Decrypting $target"
     tmp="$target.tmp"
     openssl enc -aes-256-cbc -d -pbkdf2 -in "$target" -out "$tmp"
@@ -107,8 +135,8 @@ if [[ "$options" == -* ]]; then
     target="$(echo "$target" | rev | cut -d'.' -f2- | rev)"
     mv "$tmp" "$target"
     
-    # If there is no extract
-    if [ ! -v extract ]; then
+    # If there is nothing further
+    if [ ! -v list ] && [ ! -v extract ]; then
       # Remove extensions from filename string
       target=$(echo "$target" | rev | cut -d'.' -f3- | rev)
       
@@ -119,6 +147,18 @@ if [[ "$options" == -* ]]; then
       exit
     fi
     
+  fi
+  
+  # List
+  if [ -v list ]; then
+    echo -e "Contents of $target\n"
+    tar $verbose -taf "$target"
+    
+    if [ -v decrypt ]; then 
+      rm "$target"
+    fi
+    
+    exit
   fi
   
   # Restore / extract
