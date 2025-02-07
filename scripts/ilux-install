@@ -3,10 +3,13 @@
 # Installation for the Ilux distibution.
 # For more information and updates visit
 #
-# kaai24.eu/?s=Ilux-installation-script
-# github.com/Kaai24/ilux
+# https://kaai24.eu/Ilux-installation-script
+# https://github.com/Kaai24/ilux
 
-support="For consulting or any kind of support visit www.kaai24.eu"
+# For details about the package selection visit
+# https://kaai24.eu/Ilux-design
+
+support="For Support, Concierge, Consulting and any Service visit https://www.kaai24.eu"
 
 version="241105"
 ILUXVERSION="0.2411"
@@ -73,8 +76,8 @@ installpath="/opt/ilux/install"
 instlist="apt-transport-https btrfs-progs curl flatpak gnupg htop ifupdown2 iotop mc nfs-common openssh-server rsync smartmontools smbclient cifs-utils sshfs sudo tree vim zip"
 optlist="fail2ban rsyslog"
 # Recommended
-instlist="$instlist apt-file at bc powertop ethtool git iptables-persistent nmon" #lsscsi
-optlist="$optlist lldpd dlocate"
+instlist="$instlist apt-file at bc powertop ethtool git iptables-persistent" #lsscsi
+optlist="$optlist lldpd default-jre-headless dlocate nmon"
 
 case $@ in
   #@ ClamAV
@@ -233,8 +236,8 @@ if [ $desktop = 1 ]; then
 
   #@ Common desktop apps ---------------------------
   instlist="$instlist gedit gnome-calculator gnome-screenshot nautilus ruby-notify terminator"
-  instlist="$instlist brave-browser default-jre baobab gparted gpart ffmpeg gnome-software-plugin-flatpak"
-  optlist="$optlist eog filezilla gnome-disk-utility gsmartcontrol psensor synaptic"
+  instlist="$instlist default-jre baobab gparted gpart ffmpeg webp-pixbuf-loader"
+  optlist="$optlist brave-browser eog filezilla gnome-disk-utility gnome-software-plugin-flatpak gsmartcontrol psensor synaptic"
   #gnome-disks -> gnome-disk-utility
   
   #@ Nvidia driver (if detected)
@@ -296,17 +299,18 @@ if [ ! -s "$conf_file" ]; then
 
   echo "No preconfigured $conf_file found. Creating one"
   echo "# Please review the selection of additional recommended packages (ctrl+x to close)" > "$conf_file"
+  echo "# Not all packages will be installed from the default repositories. Most valued sources are selected, e.g. download.docker.com for docker" >> "$conf_file"
   echo "$optlist" >> "$conf_file"
 
-  # Open the file in nano for user editing and pause output redirection
+  # Open the file for user editing and pause output redirection
   exec > /dev/tty 2>&1
-  nano "$conf_file"
+  editor "$conf_file"
   exec > >(tee -a "$logfile") 2>&1
 else
   echo "Using preconfigured $conf_file"
 fi
 
-optlist=$(sed '1d' "$conf_file")
+optlist=$(sed '/^#/d' "$conf_file")
 
 instlist="$instlist $optlist"
 
@@ -378,7 +382,7 @@ else
 
 	apt update
 	apt dist-upgrade -y
-	DEBIAN_FRONTEND=noninteractive apt install -y $instlist
+	DEBIAN_FRONTEND=noninteractive apt install -y "$instlist"
   
   echo "Creating files and directories for the installation"
   

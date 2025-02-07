@@ -4,6 +4,11 @@
 
 version=1.241120
 
+# Known bugs:
+
+# 250207-1:
+# Creation doesn't work if there is a / at the end of TARGET
+
 # Config:
 
 # Timestamp to append to filenames
